@@ -25,7 +25,7 @@ export default function ConfirmModal({
     <div
       className="modal-overlay"
       onClick={(e) => e.target === e.currentTarget && onClose()}
-      style={{ zIndex: 1100 }}
+      style={{ zIndex: 100005 }}
     >
       <div
         className="modal modal--sm animate-modal-enter"
