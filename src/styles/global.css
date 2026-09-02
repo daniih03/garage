@@ -488,9 +488,14 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 68px;
+  height: 68px;
+  flex-shrink: 0;
 }
 
 .progress-ring-svg {
+  width: 100%;
+  height: 100%;
   display: block;
 }
 
@@ -2319,22 +2324,112 @@ a { color: inherit; text-decoration: none; }
     margin-bottom: 16px;
   }
 
-  /* Project grid and split card on mobile */
+  /* Project grid and split card on mobile (Left info / Right summary) */
   .project-grid {
     grid-template-columns: 1fr;
     gap: 12px;
   }
 
   .project-card {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .project-card__left {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 12px;
+    display: flex;
     flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .project-card__header {
+    margin-bottom: 6px;
+  }
+
+  .project-card__acronym {
+    font-size: 11px;
+    padding: 2px 7px;
+  }
+
+  .project-card__action-btn {
+    width: 24px;
+    height: 24px;
+  }
+
+  .project-card__name {
+    font-size: 14.5px;
+    margin-bottom: 2px;
+  }
+
+  .project-card__full-name {
+    font-size: 11px;
+    margin-bottom: 6px;
+  }
+
+  .project-card__desc {
+    font-size: 11px;
+    line-height: 1.4;
+    -webkit-line-clamp: 2;
   }
 
   .project-card__right {
+    width: 145px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 10px;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.22);
+    border-left: 1px solid var(--border-subtle);
+    border-top: none;
+  }
+
+  .progress-ring-container {
+    width: 52px;
+    height: 52px;
+  }
+
+  .progress-ring-percent {
+    font-size: 11.5px;
+  }
+
+  .project-card__ring-wrapper {
+    gap: 3px;
+  }
+
+  .project-card__ring-label {
+    font-size: 9px;
+  }
+
+  .project-card__metrics {
     width: 100%;
-    border-left: none;
-    border-top: 1px solid var(--border-subtle);
-    padding: 14px 16px;
-    gap: 16px;
+    gap: 6px;
+  }
+
+  .project-card__metric-label {
+    font-size: 9.5px;
+    gap: 3px;
+  }
+
+  .project-card__metric-icon {
+    font-size: 10px;
+  }
+
+  .project-card__metric-value strong {
+    font-size: 12px;
+  }
+
+  .project-card__metric-total {
+    font-size: 10px;
+  }
+
+  .project-card__metric-track {
+    height: 3px;
+    margin-top: 1px;
   }
 
   /* Project View spacing */

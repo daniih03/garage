@@ -9,8 +9,8 @@ function ProgressRing({ percent, size = 68, strokeWidth = 6 }) {
   const strokeColor = percent === 100 ? '#10B981' : percent > 0 ? '#38BDF8' : '#3F3F46'
 
   return (
-    <div className="progress-ring-container" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="progress-ring-svg">
+    <div className="progress-ring-container">
+      <svg viewBox={`0 0 ${size} ${size}`} className="progress-ring-svg">
         <circle
           cx={size / 2}
           cy={size / 2}
