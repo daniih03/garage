@@ -836,9 +836,9 @@ export default function CardModal({
                         type="button"
                         className={`card-switcher-item${isActive ? ' card-switcher-item--active' : ''}`}
                         onClick={() => setActiveRefCardId(rc.id)}
+                        title={rc.title}
                       >
-                        <span className="card-switcher-item__id">{rc.display_id}</span>
-                        <span className="card-switcher-item__title">{rc.title}</span>
+                        <span className="card-switcher-item__id">@{rc.display_id}</span>
                       </button>
                     )
                   })}

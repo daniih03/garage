@@ -1602,11 +1602,11 @@ a { color: inherit; text-decoration: none; }
 }
 
 .card-comment-indicator--unread {
-  background: rgba(56, 189, 248, 0.16);
-  color: #38BDF8;
-  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: rgba(239, 68, 68, 0.18);
+  color: #EF4444;
+  border: 1px solid rgba(239, 68, 68, 0.55);
   font-weight: 700;
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.2);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.25);
 }
 
 .card-comment-indicator--read {
@@ -1946,23 +1946,23 @@ a { color: inherit; text-decoration: none; }
 .card-comparison-switcher__pills {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
-  overflow-x: auto;
+  overflow: visible;
   padding-bottom: 2px;
 }
 
 .card-switcher-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 11px;
+  padding: 4px 10px;
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  max-width: 220px;
+  max-width: none;
   transition: all var(--transition);
-  text-align: left;
+  text-align: center;
   flex-shrink: 0;
 }
 
@@ -3188,7 +3188,7 @@ a { color: inherit; text-decoration: none; }
   }
 
   .card-switcher-item {
-    max-width: 160px;
+    max-width: none;
     padding: 4px 8px;
   }
 
