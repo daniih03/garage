@@ -802,42 +802,13 @@ export default function CardModal({
               </button>
             </div>
 
-            {/* Prominent High-Visibility Switcher for Multiple Referenced Cards */}
+            {/* Direct-Click Switcher for Multiple Referenced Cards */}
             {referencedCards.length > 1 && (
               <div className="card-comparison-switcher">
                 <div className="card-comparison-switcher__top">
                   <span className="card-comparison-switcher__counter">
-                    Vinculadas: <strong>{activeRefIndex + 1}</strong> de <strong>{referencedCards.length}</strong>
+                    Tarjetas vinculadas ({referencedCards.length}) — pulsa para comparar:
                   </span>
-                  <div className="card-comparison-switcher__arrows">
-                    <button
-                      type="button"
-                      className="card-comparison-switcher__arrow-btn"
-                      onClick={() => {
-                        const prevIdx = (activeRefIndex - 1 + referencedCards.length) % referencedCards.length
-                        setActiveRefCardId(referencedCards[prevIdx].id)
-                      }}
-                      title="Tarjeta anterior"
-                      aria-label="Tarjeta vinculada anterior"
-                    >
-                      ←
-                    </button>
-                    <span className="card-comparison-switcher__active-badge">
-                      @{activeComparisonCard.display_id}
-                    </span>
-                    <button
-                      type="button"
-                      className="card-comparison-switcher__arrow-btn"
-                      onClick={() => {
-                        const nextIdx = (activeRefIndex + 1) % referencedCards.length
-                        setActiveRefCardId(referencedCards[nextIdx].id)
-                      }}
-                      title="Siguiente tarjeta"
-                      aria-label="Siguiente tarjeta vinculada"
-                    >
-                      →
-                    </button>
-                  </div>
                 </div>
 
                 <div className="card-comparison-switcher__pills">

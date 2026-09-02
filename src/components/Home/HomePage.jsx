@@ -7,11 +7,13 @@ import EditProjectModal from './EditProjectModal'
 import DangerConfirmModal from '../Common/DangerConfirmModal'
 
 export default function HomePage({ onOpenProject }) {
-  const [projects,        setProjects]        = useState([])
-  const [loading,         setLoading]         = useState(true)
-  const [showModal,       setShowModal]       = useState(false)
-  const [projectToEdit,   setProjectToEdit]   = useState(null)
-  const [projectToDelete, setProjectToDelete] = useState(null)
+  const [projects,           setProjects]           = useState([])
+  const [pendingInvitations, setPendingInvitations] = useState([])
+  const [currentUser,        setCurrentUser]        = useState(null)
+  const [loading,            setLoading]            = useState(true)
+  const [showModal,          setShowModal]          = useState(false)
+  const [projectToEdit,      setProjectToEdit]      = useState(null)
+  const [projectToDelete,    setProjectToDelete]    = useState(null)
 
   useEffect(() => {
     let active = true
@@ -72,12 +74,112 @@ export default function HomePage({ onOpenProject }) {
   }, [])
 
   async function fetchProjects() {
-    const { data, error } = await supabase
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setLoading(false)
+      return
+    }
+    setCurrentUser(user)
+
+    let acceptedIds = new Set()
+    let declinedIds = new Set()
+    try {
+      acceptedIds = new Set(JSON.parse(localStorage.getItem(`garage_accepted_invites_${user.id}`) || '[]'))
+      declinedIds = new Set(JSON.parse(localStorage.getItem(`garage_declined_invites_${user.id}`) || '[]'))
+    } catch {}
+
+    // Fetch user memberships to know who invited them
+    const { data: memberships } = await supabase
+      .from('project_members')
+      .select('project_id, added_by, added_at')
+      .eq('user_id', user.id)
+
+    const memberMap = new Map((memberships ?? []).map(m => [m.project_id, m]))
+
+    // Fetch inviter profiles for display
+    const addedByUserIds = Array.from(new Set(
+      (memberships ?? [])
+        .map(m => m.added_by)
+        .filter(id => id && id !== user.id)
+    ))
+
+    let profilesMap = {}
+    if (addedByUserIds.length > 0) {
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, github_username, avatar_url')
+        .in('id', addedByUserIds)
+      if (profs) {
+        for (const p of profs) profilesMap[p.id] = p
+      }
+    }
+
+    const { data: allProjects, error } = await supabase
       .from('projects')
       .select('*')
       .order('created_at', { ascending: false })
-    if (!error) setProjects(data ?? [])
+
+    if (!error && allProjects) {
+      const activeList = []
+      const pendingList = []
+
+      for (const proj of allProjects) {
+        if (declinedIds.has(proj.id)) continue
+
+        const mem = memberMap.get(proj.id)
+        const isCreator = proj.created_by === user.id
+        const wasInvitedByOther = mem?.added_by && mem.added_by !== user.id
+
+        if (wasInvitedByOther && !isCreator && !acceptedIds.has(proj.id)) {
+          pendingList.push({
+            project: proj,
+            membership: mem,
+            inviter: profilesMap[mem.added_by] || null,
+          })
+        } else {
+          activeList.push(proj)
+        }
+      }
+
+      setProjects(activeList)
+      setPendingInvitations(pendingList)
+    }
     setLoading(false)
+  }
+
+  function handleAcceptInvitation(projectId) {
+    if (!currentUser) return
+    try {
+      const key = `garage_accepted_invites_${currentUser.id}`
+      const accepted = JSON.parse(localStorage.getItem(key) || '[]')
+      if (!accepted.includes(projectId)) accepted.push(projectId)
+      localStorage.setItem(key, JSON.stringify(accepted))
+    } catch {}
+
+    const item = pendingInvitations.find(p => p.project.id === projectId)
+    if (item) {
+      setPendingInvitations(prev => prev.filter(p => p.project.id !== projectId))
+      setProjects(prev => [item.project, ...prev])
+    }
+  }
+
+  async function handleDeclineInvitation(projectId) {
+    if (!currentUser) return
+    try {
+      const key = `garage_declined_invites_${currentUser.id}`
+      const declined = JSON.parse(localStorage.getItem(key) || '[]')
+      if (!declined.includes(projectId)) declined.push(projectId)
+      localStorage.setItem(key, JSON.stringify(declined))
+    } catch {}
+
+    setPendingInvitations(prev => prev.filter(p => p.project.id !== projectId))
+    setProjects(prev => prev.filter(p => p.id !== projectId))
+
+    await supabase
+      .from('project_members')
+      .delete()
+      .eq('project_id', projectId)
+      .eq('user_id', currentUser.id)
   }
 
   async function handleDeleteProject(proj) {
@@ -123,7 +225,61 @@ export default function HomePage({ onOpenProject }) {
         </button>
       </div>
 
-      {projects.length === 0 ? (
+      {/* ── Pending Project Invitations Notification Box ── */}
+      {pendingInvitations.length > 0 && (
+        <section className="invitations-container animate-fade-down" aria-label="Invitaciones a proyectos pendientes">
+          <div className="invitations-container__header">
+            <div className="invitations-container__title-badge">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38BDF8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                <polyline points="22,6 12,13 2,6" />
+              </svg>
+              <span>
+                {pendingInvitations.length === 1 ? '1 invitación a proyecto pendiente' : `${pendingInvitations.length} invitaciones a proyectos pendientes`}
+              </span>
+            </div>
+            <span className="invitations-container__desc">
+              Has sido invitado a colaborar. Acepta para acceder al tablero o deniega para rechazarla.
+            </span>
+          </div>
+
+          <div className="invitations-container__list">
+            {pendingInvitations.map(({ project: proj, inviter }) => (
+              <div key={proj.id} className="invitation-card">
+                <div className="invitation-card__left">
+                  <span className="invitation-card__acronym">{proj.repo_acronym}</span>
+                  <div className="invitation-card__info">
+                    <h3 className="invitation-card__name">{proj.repo_name}</h3>
+                    <p className="invitation-card__sub">
+                      Invitado por <strong>@{inviter?.github_username || 'un colaborador'}</strong>
+                      {proj.description ? ` — ${proj.description}` : ''}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="invitation-card__actions">
+                  <button
+                    type="button"
+                    className="btn btn--primary btn--sm"
+                    onClick={() => handleAcceptInvitation(proj.id)}
+                  >
+                    ✓ Aceptar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm btn-decline-invite"
+                    onClick={() => handleDeclineInvitation(proj.id)}
+                  >
+                    ✕ Denegar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {projects.length === 0 && pendingInvitations.length === 0 ? (
         <div className="home-empty animate-fade-up">
           <img
             src={`${import.meta.env.BASE_URL}logos/Command_NOBG_Blanco_C.png`}

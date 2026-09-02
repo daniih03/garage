@@ -109,6 +109,14 @@ export default function Board({ project, milestone, refreshKey }) {
 
   async function fetchCards() {
     setLoading(true)
+
+    // Retrieve active user directly to prevent any async initialization race conditions
+    const { data: authData } = await supabase.auth.getUser()
+    const activeUser = authData?.user || currentUser
+    if (authData?.user && !currentUser) {
+      setCurrentUser(authData.user)
+    }
+
     const { data, error } = await supabase
       .from('cards')
       .select('*')
@@ -155,7 +163,8 @@ export default function Board({ project, milestone, refreshKey }) {
           if (new Date(c.created_at) > new Date(meta[c.card_id].latestAt)) {
             meta[c.card_id].latestAt = c.created_at
           }
-          if (currentUser?.id && c.created_by !== currentUser.id) {
+          // Only track as other's comment if created by someone other than the current user
+          if (activeUser?.id && c.created_by !== activeUser.id) {
             if (!meta[c.card_id].latestOtherCommentAt || new Date(c.created_at) > new Date(meta[c.card_id].latestOtherCommentAt)) {
               meta[c.card_id].latestOtherCommentAt = c.created_at
             }

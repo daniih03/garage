@@ -3,30 +3,83 @@ import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 
 export default function InviteModal({ project, currentMembers, onClose }) {
-  const [username, setUsername] = useState('')
-  const [found,    setFound]    = useState(null)   // profile object if found
-  const [status,   setStatus]   = useState('')     // 'searching' | 'found' | 'not-found' | 'already' | 'added'
-  const [error,    setError]    = useState('')
-  const [saving,   setSaving]   = useState(false)
-  const inputRef = useRef(null)
+  const [username,    setUsername]    = useState('')
+  const [found,       setFound]       = useState(null)   // profile object if selected
+  const [status,      setStatus]      = useState('')     // 'searching' | 'found' | 'not-found' | 'already' | 'added'
+  const [error,       setError]       = useState('')
+  const [saving,      setSaving]      = useState(false)
+  const [currentUser, setCurrentUser] = useState(null)
 
+  /* ── Autocomplete matches ── */
+  const [matches,            setMatches]            = useState([])
+  const [searchingMatches,   setSearchingMatches]   = useState(false)
+  const [showMatches,        setShowMatches]        = useState(false)
+
+  const inputRef = useRef(null)
   const memberIds = new Set(currentMembers.map(m => m.user_id))
 
   useEffect(() => {
     inputRef.current?.focus()
+    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user))
+
     const onKey = e => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  /* ── Realtime autocomplete search as user types ── */
+  useEffect(() => {
+    const q = username.trim().toLowerCase().replace(/^@/, '')
+    if (!q) {
+      setMatches([])
+      setShowMatches(false)
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      setSearchingMatches(true)
+      const { data, error: searchError } = await supabase
+        .from('profiles')
+        .select('id, github_username, avatar_url')
+        .ilike('github_username', `%${q}%`)
+        .limit(10)
+
+      if (!searchError && data) {
+        // Exclude the logged-in user themselves
+        const filtered = data.filter(p => p.id !== currentUser?.id)
+        setMatches(filtered)
+        setShowMatches(filtered.length > 0)
+      } else {
+        setMatches([])
+      }
+      setSearchingMatches(false)
+    }, 180)
+
+    return () => clearTimeout(timer)
+  }, [username, currentUser?.id])
+
+  function selectUser(userProfile) {
+    setUsername(userProfile.github_username)
+    setShowMatches(false)
+    setFound(userProfile)
+    setError('')
+
+    if (memberIds.has(userProfile.id)) {
+      setStatus('already')
+    } else {
+      setStatus('found')
+    }
+  }
+
   async function handleSearch(e) {
-    e.preventDefault()
+    e?.preventDefault()
     const q = username.trim().toLowerCase().replace(/^@/, '')
     if (!q) return
 
     setStatus('searching')
     setFound(null)
     setError('')
+    setShowMatches(false)
 
     const { data, error: dbError } = await supabase
       .from('profiles')
@@ -39,14 +92,13 @@ export default function InviteModal({ project, currentMembers, onClose }) {
       return
     }
 
-    if (memberIds.has(data.id)) {
-      setFound(data)
-      setStatus('already')
+    if (currentUser?.id && data.id === currentUser.id) {
+      setError('No puedes invitarte a ti mismo.')
+      setStatus('')
       return
     }
 
-    setFound(data)
-    setStatus('found')
+    selectUser(data)
   }
 
   async function handleInvite() {
@@ -60,8 +112,11 @@ export default function InviteModal({ project, currentMembers, onClose }) {
       added_by:   user?.id ?? null,
     })
 
-    if (dbError) setError(dbError.message)
-    else setStatus('added')
+    if (dbError) {
+      setError(dbError.message)
+    } else {
+      setStatus('added')
+    }
     setSaving(false)
   }
 
@@ -78,9 +133,9 @@ export default function InviteModal({ project, currentMembers, onClose }) {
         </div>
 
         <form className="modal__form" onSubmit={handleSearch} noValidate>
-          <div className="form-group">
+          <div className="form-group" style={{ position: 'relative' }}>
             <label className="form-label" htmlFor="invite-username">
-              Usuario de GitHub
+              Usuario de Garage / GitHub
             </label>
             <div className="invite-search-row">
               <input
@@ -89,8 +144,17 @@ export default function InviteModal({ project, currentMembers, onClose }) {
                 type="text"
                 className="form-input"
                 value={username}
-                onChange={e => { setUsername(e.target.value); setStatus(''); setFound(null); setError('') }}
-                placeholder="nombre_de_usuario"
+                onChange={e => {
+                  setUsername(e.target.value)
+                  setStatus('')
+                  setFound(null)
+                  setError('')
+                }}
+                onFocus={() => {
+                  if (matches.length > 0) setShowMatches(true)
+                }}
+                placeholder="Escribe el nombre de usuario…"
+                autoComplete="off"
               />
               <button
                 type="submit"
@@ -100,25 +164,60 @@ export default function InviteModal({ project, currentMembers, onClose }) {
                 {status === 'searching' ? '…' : 'Buscar'}
               </button>
             </div>
+
+            {/* Realtime Autocomplete Matches Dropdown */}
+            {showMatches && matches.length > 0 && (
+              <div className="invite-matches-dropdown">
+                <div className="invite-matches-dropdown__header">
+                  Coincidencias de usuarios:
+                </div>
+                {matches.map(m => {
+                  const isAlready = memberIds.has(m.id)
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className={`invite-match-item${isAlready ? ' invite-match-item--already' : ''}`}
+                      onClick={() => selectUser(m)}
+                    >
+                      {m.avatar_url ? (
+                        <img src={m.avatar_url} alt={m.github_username} className="invite-match-item__avatar" />
+                      ) : (
+                        <div className="invite-match-item__avatar invite-match-item__avatar--placeholder">
+                          {m.github_username[0].toUpperCase()}
+                        </div>
+                      )}
+                      <span className="invite-match-item__name">@{m.github_username}</span>
+                      {isAlready && (
+                        <span className="invite-match-item__tag">Ya es miembro</span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Result */}
+          {/* Results / Feedback */}
           {status === 'not-found' && (
             <p className="invite-msg invite-msg--warn">
-              Usuario no encontrado. Pídele que inicie sesión en Garage primero.
+              Usuario no encontrado. Pídele que inicie sesión en Garage al menos una vez para registrar su perfil.
             </p>
           )}
 
           {(status === 'found' || status === 'already' || status === 'added') && found && (
             <div className="invite-result">
-              {found.avatar_url
-                ? <img src={found.avatar_url} alt={found.github_username} className="invite-result__avatar" />
-                : <div className="invite-result__avatar invite-result__avatar--placeholder">{found.github_username[0].toUpperCase()}</div>
-              }
+              {found.avatar_url ? (
+                <img src={found.avatar_url} alt={found.github_username} className="invite-result__avatar" />
+              ) : (
+                <div className="invite-result__avatar invite-result__avatar--placeholder">
+                  {found.github_username[0].toUpperCase()}
+                </div>
+              )}
               <div className="invite-result__info">
                 <span className="invite-result__name">@{found.github_username}</span>
                 {status === 'already' && <span className="invite-result__tag invite-result__tag--already">Ya es miembro</span>}
-                {status === 'added'   && <span className="invite-result__tag invite-result__tag--added">✓ Añadido</span>}
+                {status === 'added'   && <span className="invite-result__tag invite-result__tag--added">✓ Invitación enviada</span>}
               </div>
             </div>
           )}
@@ -136,7 +235,7 @@ export default function InviteModal({ project, currentMembers, onClose }) {
                 onClick={handleInvite}
                 disabled={saving}
               >
-                {saving ? 'Añadiendo…' : 'Añadir al proyecto'}
+                {saving ? 'Enviando invitación…' : 'Invitar al proyecto'}
               </button>
             )}
           </div>
