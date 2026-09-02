@@ -1119,6 +1119,124 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* ============================================================
+   MEMBERS BAR
+   ============================================================ */
+
+.members-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.members-bar__avatars {
+  display: flex;
+  align-items: center;
+  gap: -6px; /* overlapping effect via negative margin on children */
+}
+
+.member-avatar,
+.member-avatar--placeholder {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-panel);
+  margin-left: -6px;
+  object-fit: cover;
+  transition: transform var(--transition);
+  cursor: default;
+}
+.member-avatar:first-child,
+.member-avatar--placeholder:first-child { margin-left: 0; }
+.member-avatar:hover,
+.member-avatar--placeholder:hover { transform: translateY(-2px); z-index: 1; }
+
+.member-avatar--placeholder {
+  background: var(--accent-subtle);
+  border-color: rgba(165,21,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* ── Invite modal extras ── */
+
+.invite-search-row {
+  display: flex;
+  gap: 8px;
+}
+.invite-search-row .form-input { flex: 1; }
+
+.invite-msg {
+  font-size: 13px;
+  padding: 10px 13px;
+  border-radius: var(--radius-sm);
+  line-height: 1.5;
+}
+.invite-msg--warn {
+  background: rgba(231,76,60,0.1);
+  border: 1px solid rgba(231,76,60,0.25);
+  color: #e74c3c;
+}
+
+.invite-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 13px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  animation: fade-up 0.2s var(--ease-out) both;
+}
+
+.invite-result__avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.invite-result__avatar--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.invite-result__info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.invite-result__name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+
+.invite-result__tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  width: fit-content;
+}
+.invite-result__tag--already {
+  background: var(--bg-input);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.invite-result__tag--added {
+  background: rgba(39,174,96,0.15);
+  color: var(--success);
+  border: 1px solid rgba(39,174,96,0.3);
+}
+
+/* ============================================================
    SCROLLBAR
    ============================================================ */
 
