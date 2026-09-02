@@ -766,6 +766,116 @@ a { color: inherit; text-decoration: none; }
 .milestone-bar__add { flex-shrink: 0; }
 
 /* ============================================================
+   BOARD WRAPPER & FILTER BAR
+   ============================================================ */
+
+.board-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.board-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.board-filter-bar__group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.board-filter-bar__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-item__label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.filter-item__select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  cursor: pointer;
+  outline: none;
+  transition: all var(--transition);
+}
+
+.filter-item__select:hover {
+  border-color: var(--border-hover);
+}
+
+.filter-item__select:focus {
+  border-color: var(--accent);
+}
+
+.filter-item__select--active {
+  border-color: var(--accent);
+  background: rgba(239, 68, 68, 0.1);
+  color: #FFA39E;
+}
+
+.board-filter-bar__clear {
+  color: var(--text-muted);
+  font-size: 11px;
+  gap: 4px;
+  padding: 2px 7px;
+}
+.board-filter-bar__clear:hover {
+  color: var(--danger);
+}
+
+.board-filter-bar__stats {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.filter-stats-badge {
+  color: var(--text-secondary);
+}
+.filter-stats-badge strong {
+  color: var(--accent);
+}
+
+.filter-stats-text {
+  color: var(--text-muted);
+}
+
+/* ============================================================
    BOARD
    ============================================================ */
 
@@ -791,7 +901,7 @@ a { color: inherit; text-decoration: none; }
   border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 190px);
+  max-height: calc(100vh - 225px);
   overflow: hidden;
   transition: border-color var(--transition), background-color var(--transition);
 }
