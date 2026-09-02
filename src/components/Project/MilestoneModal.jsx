@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 
 export default function MilestoneModal({ project, nextNumber, onClose }) {
@@ -20,17 +21,23 @@ export default function MilestoneModal({ project, nextNumber, onClose }) {
     if (!trimmed) { setError('El nombre del hito es obligatorio.'); return }
 
     setSaving(true)
+    setError('')
+
     const { error: dbError } = await supabase.from('milestones').insert({
       project_id: project.id,
       number:     nextNumber,
       title:      trimmed,
     })
 
-    if (dbError) { setError(dbError.message); setSaving(false) }
-    else onClose()
+    if (dbError) {
+      setError(dbError.message)
+      setSaving(false)
+    } else {
+      onClose()
+    }
   }
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="milestone-modal-title">
         <div className="modal__header">
@@ -71,6 +78,7 @@ export default function MilestoneModal({ project, nextNumber, onClose }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

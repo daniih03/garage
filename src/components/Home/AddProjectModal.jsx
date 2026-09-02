@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import {
   fetchUserRepos,
@@ -121,7 +122,7 @@ export default function AddProjectModal({ existingProjects, onClose }) {
     !existingNames.has(r.full_name.toLowerCase())
   )
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby="add-project-title">
         <div className="modal__header">
@@ -249,6 +250,7 @@ export default function AddProjectModal({ existingProjects, onClose }) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 
 export default function InviteModal({ project, currentMembers, onClose }) {
@@ -64,7 +65,7 @@ export default function InviteModal({ project, currentMembers, onClose }) {
     setSaving(false)
   }
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="invite-title">
         <div className="modal__header">
@@ -141,6 +142,7 @@ export default function InviteModal({ project, currentMembers, onClose }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

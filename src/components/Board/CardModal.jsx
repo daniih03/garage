@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import ConfirmModal from '../Common/ConfirmModal'
 
@@ -207,7 +208,7 @@ export default function CardModal({
     }).format(new Date(iso))
   }
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div
         className="modal modal--lg"
@@ -467,6 +468,7 @@ export default function CardModal({
           onClose={() => setShowDeleteConfirm(false)}
         />
       )}
-    </div>
+    </div>,
+    document.body
   )
 }
