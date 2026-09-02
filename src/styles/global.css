@@ -2313,4 +2313,53 @@ a { color: inherit; text-decoration: none; }
   .status-selector {
     flex-direction: column;
   }
+
+  /* Prevent iOS Safari auto-zoom on input/textarea focus */
+  .form-input,
+  .form-textarea,
+  .form-select,
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  /* Modal Mobile Fixes: prevent clipping and accommodate mobile address bar / virtual keyboard */
+  .modal-overlay {
+    padding: 10px 8px;
+    height: 100vh;
+    height: 100dvh;
+    align-items: center;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal {
+    max-width: 100%;
+    width: 100%;
+    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
+    border-radius: var(--radius-md);
+  }
+
+  .modal__form-wrapper {
+    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
+  }
+
+  .modal__header {
+    padding: 12px 16px;
+  }
+
+  .modal__scrollable,
+  .card-modal__body,
+  .card-modal__content {
+    padding: 12px 14px;
+    gap: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal__footer {
+    padding: 10px 14px;
+  }
 }
