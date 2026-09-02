@@ -76,8 +76,16 @@ export default function AddProjectModal({ existingProjects, onClose }) {
       created_by:     user?.id ?? null,
     })
 
-    if (dbError) { setError(dbError.message); setSaving(false) }
-    else onClose()
+    if (dbError) {
+      // 23505 = unique_violation (repo ya existe)
+      setError(dbError.code === '23505'
+        ? 'Este repositorio ya está añadido a Garage.'
+        : dbError.message
+      )
+      setSaving(false)
+    } else {
+      onClose()
+    }
   }
 
   const filteredRepos = repos.filter(r =>
