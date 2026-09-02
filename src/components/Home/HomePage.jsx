@@ -3,12 +3,14 @@ import { supabase } from '../../lib/supabase'
 import { fetchUserRepos } from '../../lib/github'
 import ProjectCard from './ProjectCard'
 import AddProjectModal from './AddProjectModal'
+import EditProjectModal from './EditProjectModal'
 import DangerConfirmModal from '../Common/DangerConfirmModal'
 
 export default function HomePage({ onOpenProject }) {
   const [projects,        setProjects]        = useState([])
   const [loading,         setLoading]         = useState(true)
   const [showModal,       setShowModal]       = useState(false)
+  const [projectToEdit,   setProjectToEdit]   = useState(null)
   const [projectToDelete, setProjectToDelete] = useState(null)
 
   useEffect(() => {
@@ -145,6 +147,7 @@ export default function HomePage({ onOpenProject }) {
               key={project.id}
               project={project}
               onClick={() => onOpenProject(project)}
+              onEdit={() => setProjectToEdit(project)}
               onDelete={() => setProjectToDelete(project)}
             />
           ))}
@@ -155,6 +158,16 @@ export default function HomePage({ onOpenProject }) {
         <AddProjectModal
           existingProjects={projects}
           onClose={() => setShowModal(false)}
+        />
+      )}
+
+      {projectToEdit && (
+        <EditProjectModal
+          project={projectToEdit}
+          onProjectUpdated={updated => {
+            setProjects(prev => prev.map(p => p.id === updated.id ? updated : p))
+          }}
+          onClose={() => setProjectToEdit(null)}
         />
       )}
 

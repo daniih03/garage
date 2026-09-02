@@ -149,18 +149,35 @@ export default function CardModal({
   async function handleSubmit(e) {
     e.preventDefault()
     const title = form.title.trim()
-    if (!title) { setError('El título es obligatorio.'); titleRef.current?.focus(); return }
+    if (!title) {
+      setError('El título es obligatorio.')
+      titleRef.current?.focus()
+      return
+    }
+    if (!form.primary_type) {
+      setError('El campo Primario (HW o SW) es obligatorio.')
+      return
+    }
+    if (!form.secondary_type) {
+      setError('El campo Secundario (Task, Bug, Spike o Stock) es obligatorio.')
+      return
+    }
+    if (!form.priority) {
+      setError('El campo Prioridad (Low, Mid, High o Critical) es obligatorio.')
+      return
+    }
 
     setSaving(true)
+    setError('')
 
     const payload = {
       title,
       description:    form.description.trim()    || null,
       status:         form.status,
-      primary_type:   form.primary_type           || null,
-      secondary_type: form.secondary_type         || null,
-      priority:       form.priority               || null,
-      updated_at: new Date().toISOString(),
+      primary_type:   form.primary_type,
+      secondary_type: form.secondary_type,
+      priority:       form.priority,
+      updated_at:     new Date().toISOString(),
     }
 
     let dbError
@@ -275,7 +292,9 @@ export default function CardModal({
             {/* Primary (HW / SW) + Secondary side by side */}
             <div className="form-row">
               <div className="form-group">
-                <span className="form-label" id="primary-label">Primario (HW / SW)</span>
+                <span className="form-label" id="primary-label">
+                  Primario (HW / SW) <span className="required" aria-hidden="true">*</span>
+                </span>
                 <div className="pill-group" role="group" aria-labelledby="primary-label">
                   {PRIMARY_TYPES.map(t => (
                     <button
@@ -295,7 +314,9 @@ export default function CardModal({
               </div>
 
               <div className="form-group">
-                <span className="form-label" id="secondary-label">Secundario</span>
+                <span className="form-label" id="secondary-label">
+                  Secundario <span className="required" aria-hidden="true">*</span>
+                </span>
                 <div className="pill-group" role="group" aria-labelledby="secondary-label">
                   {SECONDARY_TYPES.map(t => (
                     <button
@@ -314,7 +335,9 @@ export default function CardModal({
 
             {/* Priority */}
             <div className="form-group">
-              <span className="form-label" id="priority-label">Prioridad</span>
+              <span className="form-label" id="priority-label">
+                Prioridad <span className="required" aria-hidden="true">*</span>
+              </span>
               <div className="pill-group" role="group" aria-labelledby="priority-label">
                 {PRIORITIES.map(p => (
                   <button

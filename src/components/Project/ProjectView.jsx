@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import MilestoneBar from './MilestoneBar'
 import InviteModal from './InviteModal'
+import EditProjectModal from '../Home/EditProjectModal'
 import DangerConfirmModal from '../Common/DangerConfirmModal'
 import Board from '../Board/Board'
 
@@ -9,12 +10,14 @@ export default function ProjectView({
   project,
   activeMilestone,
   onMilestoneChange,
+  onProjectUpdate,
   onDeleteProject,
 }) {
   const [milestones,         setMilestones]         = useState([])
   const [members,            setMembers]            = useState([])
   const [loading,            setLoading]            = useState(true)
   const [showInvite,         setShowInvite]         = useState(false)
+  const [showEditProject,    setShowEditProject]    = useState(false)
   const [showDeleteProject,  setShowDeleteProject]  = useState(false)
 
   useEffect(() => {
@@ -164,6 +167,18 @@ export default function ProjectView({
           </button>
           <button
             className="btn btn--ghost btn--sm"
+            onClick={() => setShowEditProject(true)}
+            aria-label="Editar proyecto"
+            title="Editar proyecto"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+            Editar
+          </button>
+          <button
+            className="btn btn--ghost btn--sm"
             style={{ color: 'var(--danger)', borderColor: 'rgba(231,76,60,0.25)' }}
             onClick={() => setShowDeleteProject(true)}
             aria-label="Eliminar proyecto"
@@ -206,6 +221,16 @@ export default function ProjectView({
           project={project}
           currentMembers={members}
           onClose={() => setShowInvite(false)}
+        />
+      )}
+
+      {showEditProject && (
+        <EditProjectModal
+          project={project}
+          onProjectUpdated={updated => {
+            onProjectUpdate?.(updated)
+          }}
+          onClose={() => setShowEditProject(false)}
         />
       )}
 

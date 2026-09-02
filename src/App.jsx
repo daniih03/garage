@@ -122,6 +122,7 @@ export default function App() {
             project={activeProject}
             activeMilestone={activeMilestone}
             onMilestoneChange={setActiveMilestone}
+            onProjectUpdate={setActiveProject}
             onDeleteProject={goHome}
           />
         )}
