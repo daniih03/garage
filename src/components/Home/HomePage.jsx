@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { fetchUserRepos } from '../../lib/github'
 import ProjectCard from './ProjectCard'
 import AddProjectModal from './AddProjectModal'
 import ConfirmModal from '../Common/ConfirmModal'
@@ -11,17 +12,61 @@ export default function HomePage({ onOpenProject }) {
   const [projectToDelete, setProjectToDelete] = useState(null)
 
   useEffect(() => {
-    fetchProjects()
+    let active = true
+
+    async function syncAndFetch() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const username = session?.user?.user_metadata?.user_name
+        let repoNames = []
+
+        if (session?.provider_token) {
+          try {
+            const userRepos = await fetchUserRepos(session.provider_token)
+            if (Array.isArray(userRepos)) {
+              repoNames = userRepos.map(r => r.full_name)
+            }
+          } catch (e) {
+            console.warn('Could not fetch GitHub repos for auto-sync', e)
+          }
+        }
+
+        // Auto-enroll in any projects matching the user's repos or username
+        await supabase.rpc('sync_user_projects', {
+          user_repos: repoNames,
+          github_user: username || null,
+        })
+      } catch (err) {
+        console.warn('Auto-sync projects notice', err)
+      } finally {
+        if (active) {
+          await fetchProjects()
+        }
+      }
+    }
+
+    syncAndFetch()
 
     const channel = supabase
       .channel('home-projects')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'projects' },
-        handleChange
+        () => fetchProjects()
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'project_members' },
+        () => fetchProjects()
       )
       .subscribe()
 
-    return () => supabase.removeChannel(channel)
+    const onFocus = () => syncAndFetch()
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      active = false
+      supabase.removeChannel(channel)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [])
 
   async function fetchProjects() {
@@ -31,17 +76,6 @@ export default function HomePage({ onOpenProject }) {
       .order('created_at', { ascending: false })
     if (!error) setProjects(data ?? [])
     setLoading(false)
-  }
-
-  function handleChange({ eventType, new: next, old: prev }) {
-    setProjects(current => {
-      switch (eventType) {
-        case 'INSERT': return [next, ...current]
-        case 'UPDATE': return current.map(p => p.id === next.id ? next : p)
-        case 'DELETE': return current.filter(p => p.id !== prev.id)
-        default: return current
-      }
-    })
   }
 
   async function handleDeleteProject(proj) {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { fetchUserRepos, fetchRepo, getAcronym, parseRepoInput } from '../../lib/github'
+import { fetchUserRepos, fetchRepo, fetchRepoCollaborators, getAcronym, parseRepoInput } from '../../lib/github'
 
 export default function AddProjectModal({ existingProjects, onClose }) {
   const [repos,       setRepos]       = useState([])
@@ -66,14 +66,28 @@ export default function AddProjectModal({ existingProjects, onClose }) {
       return
     }
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
+
+    let collabs = []
+    if (session?.provider_token) {
+      collabs = await fetchRepoCollaborators(repoData.full_name, session.provider_token)
+    }
+
+    const collabsList = Array.from(new Set([
+      ...collabs,
+      repoData.owner?.login?.toLowerCase(),
+      user?.user_metadata?.user_name?.toLowerCase(),
+    ].filter(Boolean)))
+
     const { error: dbError } = await supabase.from('projects').insert({
-      repo_full_name: repoData.full_name,
-      repo_name:      repoData.name,
-      repo_url:       repoData.html_url,
-      repo_acronym:   getAcronym(repoData.name),
-      description:    repoData.description ?? null,
-      created_by:     user?.id ?? null,
+      repo_full_name:       repoData.full_name,
+      repo_name:            repoData.name,
+      repo_url:             repoData.html_url,
+      repo_acronym:         getAcronym(repoData.name),
+      description:          repoData.description ?? null,
+      created_by:           user?.id ?? null,
+      github_collaborators: collabsList,
     })
 
     if (dbError) {

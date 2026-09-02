@@ -27,6 +27,20 @@ export async function fetchRepo(ownerRepo, token) {
   return res.json()
 }
 
+/** Fetch collaborators for a repo */
+export async function fetchRepoCollaborators(ownerRepo, token) {
+  try {
+    const res = await fetch(`${API}/repos/${ownerRepo}/collaborators?per_page=100`, {
+      headers: headers(token),
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    return Array.isArray(data) ? data.map(u => u.login.toLowerCase()) : []
+  } catch {
+    return []
+  }
+}
+
 /**
  * Derive an acronym from a repo name using its consonants (uppercase, max 6).
  * Falls back to the first 4 chars if no consonants are found.
