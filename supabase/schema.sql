@@ -188,7 +188,7 @@ CREATE TABLE IF NOT EXISTS cards (
   title           text        NOT NULL,
   description     text,
   status          text        NOT NULL DEFAULT 'todo'
-                              CHECK (status IN ('todo','inprogress','done')),
+                              CHECK (status IN ('todo','doing','inprogress','blocked','done')),
   primary_type    text        CHECK (primary_type    IN ('HW','SW')),
   secondary_type  text        CHECK (secondary_type  IN ('task','bug','spike','stock')),
   priority        text        CHECK (priority         IN ('low','mid','high','critical')),

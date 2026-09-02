@@ -3,19 +3,29 @@ import { supabase } from '../../lib/supabase'
 import ConfirmModal from '../Common/ConfirmModal'
 
 const STATUSES = [
-  { id: 'todo',       label: 'Por hacer'   },
-  { id: 'inprogress', label: 'En progreso' },
-  { id: 'done',       label: 'Terminado'   },
+  { id: 'todo',    label: 'To do',   color: '#71717A' },
+  { id: 'doing',   label: 'Doing',   color: '#38BDF8' },
+  { id: 'blocked', label: 'Blocked', color: '#F43F5E' },
+  { id: 'done',    label: 'Done',    color: '#10B981' },
 ]
 
-const PRIMARY_TYPES   = ['HW', 'SW']
-const SECONDARY_TYPES = ['task', 'bug', 'spike', 'stock']
+const PRIMARY_TYPES = [
+  { id: 'HW', label: 'HW (Hardware)', color: '#F59E0B' },
+  { id: 'SW', label: 'SW (Software)', color: '#0284C7' },
+]
+
+const SECONDARY_TYPES = [
+  { id: 'task',  label: 'Task',  color: '#38BDF8' },
+  { id: 'bug',   label: 'Bug',   color: '#EF4444' },
+  { id: 'spike', label: 'Spike', color: '#A855F7' },
+  { id: 'stock', label: 'Stock', color: '#10B981' },
+]
 
 const PRIORITIES = [
-  { id: 'low',      label: 'Low',      color: '#5A5A5A' },
-  { id: 'mid',      label: 'Mid',      color: '#3498DB' },
-  { id: 'high',     label: 'High',     color: '#E67E22' },
-  { id: 'critical', label: 'Critical', color: '#a51500' },
+  { id: 'low',      label: 'Low',      color: '#94A3B8' },
+  { id: 'mid',      label: 'Mid',      color: '#0EA5E9' },
+  { id: 'high',     label: 'High',     color: '#F97316' },
+  { id: 'critical', label: 'Critical', color: '#DC2626' },
 ]
 
 export default function CardModal({
@@ -29,12 +39,15 @@ export default function CardModal({
 }) {
   const isEditing = Boolean(card)
 
+  // Map legacy inprogress to doing
+  const initialStatus = (card?.status === 'inprogress' ? 'doing' : card?.status)
+    ?? (defaultStatus === 'inprogress' ? 'doing' : defaultStatus)
+
   /* ── Form state ── */
   const [form, setForm] = useState({
     title:          card?.title          ?? '',
     description:    card?.description    ?? '',
-    github_url:     card?.github_url     ?? '',
-    status:         card?.status         ?? defaultStatus,
+    status:         initialStatus,
     primary_type:   card?.primary_type   ?? '',
     secondary_type: card?.secondary_type ?? '',
     priority:       card?.priority       ?? '',
@@ -59,27 +72,27 @@ export default function CardModal({
 
     const onKey = e => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
 
-    let channel
-    if (isEditing && card.id) {
-      loadComments()
-      channel = supabase
-        .channel(`comments-${card.id}`)
-        .on('postgres_changes',
-          { event: '*', schema: 'public', table: 'card_comments', filter: `card_id=eq.${card.id}` },
-          handleCommentChange
-        )
-        .subscribe()
-    }
+  /* ── Comments: Fetch + Realtime ── */
+  useEffect(() => {
+    if (!isEditing || !card?.id) return
 
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      if (channel) supabase.removeChannel(channel)
-    }
-  }, [onClose, isEditing, card?.id])
+    fetchComments()
 
-  /* ── Comments helpers ── */
-  async function loadComments() {
+    const channel = supabase
+      .channel(`comments-${card.id}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'card_comments', filter: `card_id=eq.${card.id}` },
+        handleCommentChange
+      )
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [card?.id, isEditing])
+
+  async function fetchComments() {
     const { data } = await supabase
       .from('card_comments')
       .select('*')
@@ -98,35 +111,40 @@ export default function CardModal({
     })
   }
 
+  /* ── Comment actions ── */
   async function handleAddComment() {
-    const content = newComment.trim()
-    if (!content) return
+    const text = newComment.trim()
+    if (!text || !currentUser) return
     setAddingComment(true)
-    await supabase.from('card_comments').insert({
+
+    const { error: dbError } = await supabase.from('card_comments').insert({
       card_id:    card.id,
-      content,
-      created_by: currentUser?.id ?? null,
+      content:    text,
+      created_by: currentUser.id,
     })
-    setNewComment('')
+
+    if (!dbError) setNewComment('')
     setAddingComment(false)
   }
 
-  async function handleDeleteComment(id) {
-    await supabase.from('card_comments').delete().eq('id', id)
+  async function handleDeleteComment(commentId) {
+    setComments(prev => prev.filter(c => c.id !== commentId))
+    await supabase.from('card_comments').delete().eq('id', commentId)
   }
 
-  /* ── Form helpers ── */
+  /* ── Form handlers ── */
   function handleChange(e) {
     const { name, value } = e.target
     setForm(prev => ({ ...prev, [name]: value }))
-    if (error) setError('')
   }
 
   function togglePill(field, value) {
-    setForm(prev => ({ ...prev, [field]: prev[field] === value ? '' : value }))
+    setForm(prev => ({
+      ...prev,
+      [field]: prev[field] === value ? '' : value,
+    }))
   }
 
-  /* ── Submit ── */
   async function handleSubmit(e) {
     e.preventDefault()
     const title = form.title.trim()
@@ -137,7 +155,6 @@ export default function CardModal({
     const payload = {
       title,
       description:    form.description.trim()    || null,
-      github_url:     form.github_url.trim()      || null,
       status:         form.status,
       primary_type:   form.primary_type           || null,
       secondary_type: form.secondary_type         || null,
@@ -218,8 +235,9 @@ export default function CardModal({
         </div>
 
         {/* Scrollable body */}
-        <div className="modal__scrollable">
+        <div className="card-modal__body">
           <form className="modal__form" onSubmit={handleSubmit} noValidate>
+            {error && <p className="form-error" role="alert">{error}</p>}
 
             {/* Title */}
             <div className="form-group">
@@ -231,14 +249,12 @@ export default function CardModal({
                 id="c-title"
                 name="title"
                 type="text"
-                className={`form-input${error ? ' form-input--error' : ''}`}
+                className="form-input"
                 value={form.title}
                 onChange={handleChange}
-                placeholder="Breve y descriptivo…"
-                maxLength={120}
-                aria-required="true"
+                placeholder="Resumen claro de la tarea…"
+                required
               />
-              {error && <span className="form-error" role="alert">{error}</span>}
             </div>
 
             {/* Description */}
@@ -255,22 +271,22 @@ export default function CardModal({
               />
             </div>
 
-            {/* Primary + Secondary side by side */}
+            {/* Primary (HW / SW) + Secondary (task, bug, spike, stock) side by side */}
             <div className="form-row">
               <div className="form-group">
-                <span className="form-label" id="primary-label">Primario</span>
+                <span className="form-label" id="primary-label">Primario (HW / SW)</span>
                 <div className="pill-group" role="group" aria-labelledby="primary-label">
                   {PRIMARY_TYPES.map(t => (
                     <button
-                      key={t}
+                      key={t.id}
                       type="button"
-                      className={`pill${form.primary_type === t
-                        ? ` pill--active pill--primary-${t.toLowerCase()}`
+                      className={`pill pill--primary-${t.id.toLowerCase()}${form.primary_type === t.id
+                        ? ` pill--active`
                         : ''}`}
-                      onClick={() => togglePill('primary_type', t)}
-                      aria-pressed={form.primary_type === t}
+                      onClick={() => togglePill('primary_type', t.id)}
+                      aria-pressed={form.primary_type === t.id}
                     >
-                      {t}
+                      {t.label}
                     </button>
                   ))}
                 </div>
@@ -281,13 +297,13 @@ export default function CardModal({
                 <div className="pill-group" role="group" aria-labelledby="secondary-label">
                   {SECONDARY_TYPES.map(t => (
                     <button
-                      key={t}
+                      key={t.id}
                       type="button"
-                      className={`pill${form.secondary_type === t ? ' pill--active' : ''}`}
-                      onClick={() => togglePill('secondary_type', t)}
-                      aria-pressed={form.secondary_type === t}
+                      className={`pill pill--secondary-${t.id}${form.secondary_type === t.id ? ' pill--active' : ''}`}
+                      onClick={() => togglePill('secondary_type', t.id)}
+                      aria-pressed={form.secondary_type === t.id}
                     >
-                      {t}
+                      {t.label}
                     </button>
                   ))}
                 </div>
@@ -302,7 +318,7 @@ export default function CardModal({
                   <button
                     key={p.id}
                     type="button"
-                    className={`pill${form.priority === p.id ? ' pill--active' : ''}`}
+                    className={`pill pill--priority-${p.id}${form.priority === p.id ? ' pill--active' : ''}`}
                     style={form.priority === p.id ? { '--pill-active-color': p.color } : {}}
                     onClick={() => togglePill('priority', p.id)}
                     aria-pressed={form.priority === p.id}
@@ -313,21 +329,7 @@ export default function CardModal({
               </div>
             </div>
 
-            {/* GitHub URL */}
-            <div className="form-group">
-              <label className="form-label" htmlFor="c-github">Repositorio GitHub</label>
-              <input
-                id="c-github"
-                name="github_url"
-                type="url"
-                className="form-input"
-                value={form.github_url}
-                onChange={handleChange}
-                placeholder="https://github.com/usuario/repo"
-              />
-            </div>
-
-            {/* Status */}
+            {/* Status (To do, Doing, Blocked, Done) */}
             <div className="form-group">
               <span className="form-label" id="status-label">Estado</span>
               <div className="status-selector" role="radiogroup" aria-labelledby="status-label">
@@ -335,6 +337,7 @@ export default function CardModal({
                   <label
                     key={s.id}
                     className={`status-option${form.status === s.id ? ' status-option--active' : ''}`}
+                    style={form.status === s.id ? { borderColor: s.color, color: s.color } : {}}
                   >
                     <input
                       type="radio"

@@ -266,15 +266,16 @@ a { color: inherit; text-decoration: none; }
 .header__breadcrumb-sep        { color: var(--text-muted); font-size: 13px; }
 .header__breadcrumb-current    { font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .header__badge {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 800;
   font-family: var(--font-mono);
-  letter-spacing: 0.06em;
-  color: var(--accent);
-  background: var(--accent-subtle);
-  border: 1px solid rgba(165,21,0,0.25);
-  padding: 1px 6px;
-  border-radius: 3px;
+  letter-spacing: 0.1em;
+  color: #FFFFFF;
+  background: var(--accent);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 2px 8px;
+  border-radius: 4px;
+  box-shadow: 0 1px 6px rgba(165, 21, 0, 0.45);
 }
 
 /* Right side */
@@ -468,14 +469,15 @@ a { color: inherit; text-decoration: none; }
 
 .project-card__acronym {
   font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 800;
   letter-spacing: 0.1em;
-  color: var(--accent);
-  background: var(--accent-subtle);
-  border: 1px solid rgba(165,21,0,0.2);
-  padding: 3px 8px;
+  color: #FFFFFF;
+  background: var(--accent);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  padding: 3px 9px;
   border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(165, 21, 0, 0.35);
 }
 
 .project-card__github-link {
@@ -813,32 +815,123 @@ a { color: inherit; text-decoration: none; }
   flex-wrap: wrap;
 }
 
+/* Task ID - Prominent Monospace Chip */
 .card__display-id {
   font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted);
-  letter-spacing: 0.05em;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 2px 7px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
-.card__badges { display: flex; gap: 4px; flex-wrap: wrap; }
+.card__badges { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
 
-/* Badge system */
-.badge {
+/* Primary Tag (HW / SW) - SOLID & PROMINENT */
+.badge-primary {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+  animation: badge-pop 0.25s var(--ease) both;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.badge-primary--hw {
+  background: #D97706; /* Solid Hardware Amber */
+  color: #FFFFFF;
+  border: 1px solid #F59E0B;
+}
+
+.badge-primary--sw {
+  background: #0284C7; /* Solid Software Electric Blue */
+  color: #FFFFFF;
+  border: 1px solid #38BDF8;
+}
+
+/* Secondary Tags (Task, Bug, Spike, Stock) - Distinct Signature Colors */
+.badge-secondary {
+  display: inline-flex;
+  align-items: center;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 2px 6px;
-  border-radius: 3px;
-  color: var(--badge-color, var(--text-muted));
-  background: color-mix(in srgb, var(--badge-color, var(--text-muted)) 15%, transparent);
-  border: 1px solid color-mix(in srgb, var(--badge-color, var(--text-muted)) 30%, transparent);
+  border-radius: 4px;
   animation: badge-pop 0.25s var(--ease) both;
 }
 
-.badge--hw { --badge-color: var(--warning); }
-.badge--sw { --badge-color: var(--info); }
+.badge-secondary--task {
+  background: rgba(56, 189, 248, 0.14);
+  color: #38BDF8;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+}
+
+.badge-secondary--bug {
+  background: rgba(239, 68, 68, 0.18);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.55);
+}
+
+.badge-secondary--spike {
+  background: rgba(168, 85, 247, 0.16);
+  color: #C084FC;
+  border: 1px solid rgba(168, 85, 247, 0.45);
+}
+
+.badge-secondary--stock {
+  background: rgba(16, 185, 129, 0.16);
+  color: #34D399;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+}
+
+/* Priority Tags */
+.badge-priority {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1.5px 5px;
+  border-radius: 3px;
+}
+
+.badge-priority--low {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94A3B8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.badge-priority--mid {
+  background: rgba(14, 165, 233, 0.12);
+  color: #38BDF8;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+.badge-priority--high {
+  background: rgba(249, 115, 22, 0.15);
+  color: #FB923C;
+  border: 1px solid rgba(249, 115, 22, 0.4);
+}
+
+.badge-priority--critical {
+  background: rgba(220, 38, 38, 0.22);
+  color: #F87171;
+  border: 1px solid rgba(220, 38, 38, 0.6);
+  font-weight: 800;
+}
 
 /* Card body */
 .card__body { margin-bottom: 6px; padding-right: 24px; }
@@ -859,20 +952,6 @@ a { color: inherit; text-decoration: none; }
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-
-/* GitHub link */
-.card__github-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--accent);
-  margin-top: 5px;
-  transition: color var(--transition);
-  cursor: pointer;
-}
-.card__github-link:hover { color: var(--accent-hover); }
 
 /* Actions (delete, shown on hover) */
 .card__actions {
@@ -1051,20 +1130,54 @@ a { color: inherit; text-decoration: none; }
   border-color: color-mix(in srgb, var(--pill-active-color, var(--accent)) 40%, transparent);
   color: var(--pill-active-color, var(--accent));
 }
-.pill--primary-hw.pill--active { --pill-active-color: var(--warning); }
-.pill--primary-sw.pill--active { --pill-active-color: var(--info); }
+/* Primary HW / SW Pill Buttons */
+.pill--primary-hw.pill--active {
+  background: #D97706 !important;
+  color: #FFFFFF !important;
+  border-color: #F59E0B !important;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.35);
+}
+.pill--primary-sw.pill--active {
+  background: #0284C7 !important;
+  color: #FFFFFF !important;
+  border-color: #38BDF8 !important;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
+}
+
+/* Secondary Pill Buttons */
+.pill--secondary-task.pill--active {
+  background: rgba(56, 189, 248, 0.2) !important;
+  color: #38BDF8 !important;
+  border-color: #38BDF8 !important;
+}
+.pill--secondary-bug.pill--active {
+  background: rgba(239, 68, 68, 0.2) !important;
+  color: #F87171 !important;
+  border-color: #EF4444 !important;
+}
+.pill--secondary-spike.pill--active {
+  background: rgba(168, 85, 247, 0.2) !important;
+  color: #C084FC !important;
+  border-color: #A855F7 !important;
+}
+.pill--secondary-stock.pill--active {
+  background: rgba(16, 185, 129, 0.2) !important;
+  color: #34D399 !important;
+  border-color: #10B981 !important;
+}
 
 /* Display ID badge in modal header */
 .display-id-badge {
   font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--accent);
-  background: var(--accent-subtle);
-  border: 1px solid rgba(165,21,0,0.25);
-  padding: 2px 8px;
-  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  padding: 3px 10px;
+  border-radius: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 /* ============================================================

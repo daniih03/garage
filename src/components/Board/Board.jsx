@@ -5,9 +5,10 @@ import CardModal from './CardModal'
 import ConfirmModal from '../Common/ConfirmModal'
 
 const COLUMNS = [
-  { id: 'todo',       label: 'Por hacer',   color: '#9E9E9E' },
-  { id: 'inprogress', label: 'En progreso', color: '#a51500' },
-  { id: 'done',       label: 'Terminado',   color: '#27AE60' },
+  { id: 'todo',    label: 'To do',   color: '#71717A' },
+  { id: 'doing',   label: 'Doing',   color: '#38BDF8' },
+  { id: 'blocked', label: 'Blocked', color: '#F43F5E' },
+  { id: 'done',    label: 'Done',    color: '#10B981' },
 ]
 
 export default function Board({ project, milestone }) {
@@ -98,7 +99,10 @@ export default function Board({ project, milestone }) {
           <Column
             key={col.id}
             column={col}
-            cards={cards.filter(c => c.status === col.id)}
+            cards={cards.filter(c => {
+              if (col.id === 'doing') return c.status === 'doing' || c.status === 'inprogress'
+              return c.status === col.id
+            })}
             draggingId={draggingId}
             onAddCard={() => setModal({ open: true, card: null, defaultStatus: col.id })}
             onEditCard={card => setModal({ open: true, card, defaultStatus: card.status })}
