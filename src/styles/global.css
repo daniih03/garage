@@ -230,6 +230,7 @@ a { color: inherit; text-decoration: none; }
 
 /* Brand (home view) */
 .header__brand        { display: flex; align-items: center; gap: 10px; }
+.header__logo-img     { width: 26px; height: 26px; object-fit: contain; display: block; flex-shrink: 0; }
 .header__brand-name   {
   font-size: 14px;
   font-weight: 800;
@@ -359,6 +360,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 .login-logo         { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.login-logo__img    { width: 76px; height: 76px; object-fit: contain; display: block; filter: drop-shadow(0 4px 16px rgba(165, 21, 0, 0.3)); }
 .login-logo__text   { font-size: 18px; font-weight: 800; letter-spacing: 0.22em; color: var(--text-primary); }
 .login-title        { font-size: 22px; font-weight: 600; color: var(--text-primary); text-align: center; margin-top: -4px; }
 .login-subtitle     { font-size: 14px; color: var(--text-secondary); text-align: center; line-height: 1.65; max-width: 260px; }

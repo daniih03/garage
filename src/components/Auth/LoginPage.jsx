@@ -31,10 +31,13 @@ export default function LoginPage() {
       <div className="login-card">
         {/* Logo */}
         <div className="login-logo">
-          <svg width="44" height="44" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-            <rect width="40" height="40" rx="8" fill="#D35400" />
-            <path d="M8 28L14 11L21 22L25.5 15L33 28H8Z" fill="white" fillOpacity="0.92" />
-          </svg>
+          <img
+            src={`${import.meta.env.BASE_URL}logos/Command_NOBG_Blanco.png`}
+            alt="Command"
+            className="login-logo__img"
+            width="80"
+            height="80"
+          />
           <span className="login-logo__text">GARAGE</span>
         </div>
 

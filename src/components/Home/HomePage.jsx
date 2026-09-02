@@ -123,10 +123,13 @@ export default function HomePage({ onOpenProject }) {
 
       {projects.length === 0 ? (
         <div className="home-empty animate-fade-up">
-          <svg width="52" height="52" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-            <rect width="40" height="40" rx="8" fill="#a51500" fillOpacity="0.1" />
-            <path d="M8 28L14 11L21 22L25.5 15L33 28H8Z" fill="#a51500" fillOpacity="0.55" />
-          </svg>
+          <img
+            src={`${import.meta.env.BASE_URL}logos/Command_NOBG_Blanco_C.png`}
+            alt=""
+            width="64"
+            height="64"
+            style={{ opacity: 0.35, objectFit: 'contain' }}
+          />
           <h2 className="home-empty__title">Sin proyectos todavía</h2>
           <p className="home-empty__desc">
             Añade un repositorio de GitHub para empezar a gestionar tareas con el tablero Kanban.

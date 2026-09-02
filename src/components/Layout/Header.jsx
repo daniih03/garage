@@ -44,10 +44,13 @@ export default function Header({ user, view, activeProject, onGoHome }) {
           </>
         ) : (
           <div className="header__brand">
-            <svg width="26" height="26" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-              <rect width="40" height="40" rx="6" fill="#a51500" />
-              <path d="M8 28L14 11L21 22L25.5 15L33 28H8Z" fill="white" fillOpacity="0.92" />
-            </svg>
+            <img
+              src={`${import.meta.env.BASE_URL}logos/Command_NOBG_Blanco_C.png`}
+              alt="Command"
+              className="header__logo-img"
+              width="26"
+              height="26"
+            />
             <span className="header__brand-name">GARAGE</span>
           </div>
         )}
