@@ -38,6 +38,7 @@ export default function CardModal({
   cardsInStatus,
   milestoneCards = [],
   allCards = [],
+  onCardViewed,
   onDeleteCard,
   onClose,
 }) {
@@ -211,7 +212,10 @@ export default function CardModal({
       created_by: currentUser.id,
     })
 
-    if (!dbError) setNewComment('')
+    if (!dbError) {
+      setNewComment('')
+      onCardViewed?.(card.id)
+    }
     setAddingComment(false)
   }
 
@@ -809,18 +813,27 @@ export default function CardModal({
                     <button
                       type="button"
                       className="card-comparison-switcher__arrow-btn"
-                      disabled={activeRefIndex === 0}
-                      onClick={() => setActiveRefCardId(referencedCards[activeRefIndex - 1].id)}
+                      onClick={() => {
+                        const prevIdx = (activeRefIndex - 1 + referencedCards.length) % referencedCards.length
+                        setActiveRefCardId(referencedCards[prevIdx].id)
+                      }}
                       title="Tarjeta anterior"
+                      aria-label="Tarjeta vinculada anterior"
                     >
                       ←
                     </button>
+                    <span className="card-comparison-switcher__active-badge">
+                      @{activeComparisonCard.display_id}
+                    </span>
                     <button
                       type="button"
                       className="card-comparison-switcher__arrow-btn"
-                      disabled={activeRefIndex === referencedCards.length - 1}
-                      onClick={() => setActiveRefCardId(referencedCards[activeRefIndex + 1].id)}
+                      onClick={() => {
+                        const nextIdx = (activeRefIndex + 1) % referencedCards.length
+                        setActiveRefCardId(referencedCards[nextIdx].id)
+                      }}
                       title="Siguiente tarjeta"
+                      aria-label="Siguiente tarjeta vinculada"
                     >
                       →
                     </button>

@@ -126,24 +126,39 @@ export default function Board({ project, milestone, refreshKey }) {
         }
         return card
       })
-      setCards(normalized)
+
+      // Deduplicate cards to prevent any duplicate keys or items
+      const uniqueCards = []
+      const seenIds = new Set()
+      for (const c of normalized) {
+        if (!seenIds.has(c.id)) {
+          seenIds.add(c.id)
+          uniqueCards.push(c)
+        }
+      }
+      setCards(uniqueCards)
 
       // Fetch comments metadata for cards
-      const cardIds = normalized.map(c => c.id)
+      const cardIds = uniqueCards.map(c => c.id)
       if (cardIds.length > 0) {
         const { data: comments } = await supabase
           .from('card_comments')
-          .select('card_id, created_at')
+          .select('card_id, created_at, created_by')
           .in('card_id', cardIds)
 
         const meta = {}
         for (const c of comments ?? []) {
           if (!meta[c.card_id]) {
-            meta[c.card_id] = { count: 0, latestAt: c.created_at }
+            meta[c.card_id] = { count: 0, latestAt: c.created_at, latestOtherCommentAt: null }
           }
           meta[c.card_id].count++
           if (new Date(c.created_at) > new Date(meta[c.card_id].latestAt)) {
             meta[c.card_id].latestAt = c.created_at
+          }
+          if (currentUser?.id && c.created_by !== currentUser.id) {
+            if (!meta[c.card_id].latestOtherCommentAt || new Date(c.created_at) > new Date(meta[c.card_id].latestOtherCommentAt)) {
+              meta[c.card_id].latestOtherCommentAt = c.created_at
+            }
           }
         }
         setCommentsMeta(meta)
@@ -155,26 +170,40 @@ export default function Board({ project, milestone, refreshKey }) {
   function handleRealtimeChange({ eventType, new: next, old: prev }) {
     setCards(current => {
       switch (eventType) {
-        case 'INSERT': return [...current, next]
-        case 'UPDATE': return current.map(c => c.id === next.id ? next : c)
-        case 'DELETE': return current.filter(c => c.id !== prev.id)
+        case 'INSERT': {
+          if (!next || current.some(c => c.id === next.id)) return current
+          return [...current, next]
+        }
+        case 'UPDATE': {
+          if (!next) return current
+          return current.map(c => c.id === next.id ? next : c)
+        }
+        case 'DELETE': {
+          if (!prev) return current
+          return current.filter(c => c.id !== prev.id)
+        }
         default: return current
       }
     })
   }
 
+  function handleMarkCardViewed(cardId) {
+    if (!cardId) return
+    const now = new Date().toISOString()
+    setViewedMap(prev => {
+      const next = { ...prev, [cardId]: now }
+      if (currentUser) {
+        try {
+          localStorage.setItem(`garage_viewed_comments_${currentUser.id}`, JSON.stringify(next))
+        } catch {}
+      }
+      return next
+    })
+  }
+
   function handleOpenCard(card, defaultStatus = 'todo') {
-    if (card) {
-      const now = new Date().toISOString()
-      setViewedMap(prev => {
-        const next = { ...prev, [card.id]: now }
-        if (currentUser) {
-          try {
-            localStorage.setItem(`garage_viewed_comments_${currentUser.id}`, JSON.stringify(next))
-          } catch {}
-        }
-        return next
-      })
+    if (card?.id) {
+      handleMarkCardViewed(card.id)
     }
     setModal({ open: true, card, defaultStatus: card?.status ?? defaultStatus })
   }
@@ -394,7 +423,14 @@ export default function Board({ project, milestone, refreshKey }) {
               const meta = commentsMeta[c.id]
               const count = meta?.count ?? 0
               const lastViewedAt = viewedMap[c.id]
-              const hasUnviewed = count > 0 && (!lastViewedAt || new Date(meta.latestAt) > new Date(lastViewedAt))
+              let hasUnviewed = false
+              if (count > 0) {
+                if (!lastViewedAt) {
+                  hasUnviewed = currentUser ? Boolean(meta?.latestOtherCommentAt) : true
+                } else {
+                  hasUnviewed = Boolean(meta?.latestOtherCommentAt && new Date(meta.latestOtherCommentAt) > new Date(lastViewedAt))
+                }
+              }
               return {
                 ...c,
                 commentCount: count,
@@ -430,8 +466,12 @@ export default function Board({ project, milestone, refreshKey }) {
             c.status === (modal.card?.status ?? modal.defaultStatus)
           )}
           allCards={allProjectCards}
+          onCardViewed={handleMarkCardViewed}
           onDeleteCard={handleDelete}
           onClose={() => {
+            if (modal.card?.id) {
+              handleMarkCardViewed(modal.card.id)
+            }
             setModal({ open: false, card: null, defaultStatus: 'todo' })
             fetchCards()
           }}
