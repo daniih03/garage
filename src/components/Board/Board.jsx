@@ -53,6 +53,9 @@ export default function Board({ project, milestone, refreshKey }) {
   const [modal,           setModal]           = useState({ open: false, card: null, defaultStatus: 'todo' })
   const [draggingId,      setDraggingId]      = useState(null)
   const [cardToDelete,    setCardToDelete]    = useState(null)
+  const [currentUser,     setCurrentUser]     = useState(null)
+  const [commentsMeta,    setCommentsMeta]    = useState({})
+  const [viewedMap,       setViewedMap]       = useState({})
 
   /* ── Filter state ── */
   // Single select (or null): 'HW' | 'SW' | null
@@ -61,6 +64,19 @@ export default function Board({ project, milestone, refreshKey }) {
   const [secondaryFilters, setSecondaryFilters] = useState([])
   // Multi-select (or empty): ['critical', 'high', ...]
   const [priorityFilters,  setPriorityFilters]  = useState([])
+
+  /* ── User & viewed map setup ── */
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setCurrentUser(user)
+      if (user) {
+        try {
+          const stored = JSON.parse(localStorage.getItem(`garage_viewed_comments_${user.id}`) || '{}')
+          setViewedMap(stored)
+        } catch {}
+      }
+    })
+  }, [])
 
   /* ── Fetch + Realtime ── */
   useEffect(() => {
@@ -72,6 +88,10 @@ export default function Board({ project, milestone, refreshKey }) {
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'cards', filter: `milestone_id=eq.${milestone.id}` },
         handleRealtimeChange
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'card_comments' },
+        () => fetchCards()
       )
       .subscribe()
 
@@ -107,6 +127,27 @@ export default function Board({ project, milestone, refreshKey }) {
         return card
       })
       setCards(normalized)
+
+      // Fetch comments metadata for cards
+      const cardIds = normalized.map(c => c.id)
+      if (cardIds.length > 0) {
+        const { data: comments } = await supabase
+          .from('card_comments')
+          .select('card_id, created_at')
+          .in('card_id', cardIds)
+
+        const meta = {}
+        for (const c of comments ?? []) {
+          if (!meta[c.card_id]) {
+            meta[c.card_id] = { count: 0, latestAt: c.created_at }
+          }
+          meta[c.card_id].count++
+          if (new Date(c.created_at) > new Date(meta[c.card_id].latestAt)) {
+            meta[c.card_id].latestAt = c.created_at
+          }
+        }
+        setCommentsMeta(meta)
+      }
     }
     setLoading(false)
   }
@@ -120,6 +161,22 @@ export default function Board({ project, milestone, refreshKey }) {
         default: return current
       }
     })
+  }
+
+  function handleOpenCard(card, defaultStatus = 'todo') {
+    if (card) {
+      const now = new Date().toISOString()
+      setViewedMap(prev => {
+        const next = { ...prev, [card.id]: now }
+        if (currentUser) {
+          try {
+            localStorage.setItem(`garage_viewed_comments_${currentUser.id}`, JSON.stringify(next))
+          } catch {}
+        }
+        return next
+      })
+    }
+    setModal({ open: true, card, defaultStatus: card?.status ?? defaultStatus })
   }
 
   /* ── Drag & drop ── */
@@ -333,6 +390,17 @@ export default function Board({ project, milestone, refreshKey }) {
               return c.status === col.id
             })
             .sort(compareCardsByPriority)
+            .map(c => {
+              const meta = commentsMeta[c.id]
+              const count = meta?.count ?? 0
+              const lastViewedAt = viewedMap[c.id]
+              const hasUnviewed = count > 0 && (!lastViewedAt || new Date(meta.latestAt) > new Date(lastViewedAt))
+              return {
+                ...c,
+                commentCount: count,
+                hasUnviewedComments: hasUnviewed,
+              }
+            })
 
           return (
             <Column
@@ -340,8 +408,8 @@ export default function Board({ project, milestone, refreshKey }) {
               column={col}
               cards={colCards}
               draggingId={draggingId}
-              onAddCard={() => setModal({ open: true, card: null, defaultStatus: col.id })}
-              onEditCard={card => setModal({ open: true, card, defaultStatus: card.status })}
+              onAddCard={() => handleOpenCard(null, col.id)}
+              onEditCard={card => handleOpenCard(card, card.status)}
               onDeleteCard={card => setCardToDelete(card)}
               onDrop={handleDrop}
               onDragStart={setDraggingId}
@@ -357,12 +425,16 @@ export default function Board({ project, milestone, refreshKey }) {
           defaultStatus={modal.defaultStatus}
           project={project}
           milestone={milestone}
+          milestoneCards={cards}
           cardsInStatus={cards.filter(c =>
             c.status === (modal.card?.status ?? modal.defaultStatus)
           )}
           allCards={allProjectCards}
           onDeleteCard={handleDelete}
-          onClose={() => setModal({ open: false, card: null, defaultStatus: 'todo' })}
+          onClose={() => {
+            setModal({ open: false, card: null, defaultStatus: 'todo' })
+            fetchCards()
+          }}
         />
       )}
 

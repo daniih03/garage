@@ -36,6 +36,7 @@ export default function CardModal({
   project,
   milestone,
   cardsInStatus,
+  milestoneCards = [],
   allCards = [],
   onDeleteCard,
   onClose,
@@ -67,6 +68,10 @@ export default function CardModal({
     selectedIndex: 0,
   })
 
+  /* ── Dedicated Milestone Card Picker state ── */
+  const [showPickerModal, setShowPickerModal] = useState(false)
+  const [pickerSearch,    setPickerSearch]    = useState('')
+
   /* ── Comparison panel state ── */
   const [showComparison,    setShowComparison]    = useState(true)
   const [activeRefCardId,   setActiveRefCardId]   = useState(null)
@@ -80,16 +85,24 @@ export default function CardModal({
   const titleRef = useRef(null)
   const descRef  = useRef(null)
 
+  /* ── All available cards in THIS milestone (excluding self) ── */
+  const availableMilestoneCards = useMemo(() => {
+    const list = milestoneCards.length > 0
+      ? milestoneCards
+      : allCards.filter(c => c.milestone_id === milestone.id)
+    return list.filter(c => c.id !== card?.id)
+  }, [milestoneCards, allCards, milestone.id, card?.id])
+
   /* ── Parse referenced cards from title & description ── */
   const referencedCards = useMemo(() => {
     const text = `${form.title} ${form.description}`
     const matches = Array.from(text.matchAll(/@([A-Z0-9]+-\d{2}-\d{3})/g)).map(m => m[1])
     const uniqueIds = Array.from(new Set(matches))
     return uniqueIds
-      .map(id => allCards.find(c => c.display_id === id))
+      .map(id => allCards.find(c => c.display_id === id) || availableMilestoneCards.find(c => c.display_id === id))
       .filter(Boolean)
       .filter(c => c.id !== card?.id)
-  }, [form.title, form.description, allCards, card?.id])
+  }, [form.title, form.description, allCards, availableMilestoneCards, card?.id])
 
   // Sync activeRefCardId when referencedCards change
   useEffect(() => {
@@ -103,13 +116,13 @@ export default function CardModal({
   }, [referencedCards, activeRefCardId])
 
   const activeComparisonCard = referencedCards.find(c => c.id === activeRefCardId) || referencedCards[0]
+  const activeRefIndex = referencedCards.findIndex(c => c.id === activeComparisonCard?.id)
 
-  /* ── Filter candidates for @ mention autocomplete ── */
+  /* ── Filter candidates for @ mention autocomplete (only from milestone) ── */
   const mentionCandidates = useMemo(() => {
     if (!mentionMenu.open) return []
     const q = mentionMenu.query.toLowerCase()
-    return allCards
-      .filter(c => c.id !== card?.id)
+    return availableMilestoneCards
       .filter(c => {
         if (!q) return true
         return (
@@ -117,8 +130,18 @@ export default function CardModal({
           c.title?.toLowerCase().includes(q)
         )
       })
-      .slice(0, 6)
-  }, [mentionMenu.open, mentionMenu.query, allCards, card?.id])
+      .slice(0, 8)
+  }, [mentionMenu.open, mentionMenu.query, availableMilestoneCards])
+
+  /* ── Filter cards for dedicated picker ── */
+  const filteredPickerCards = useMemo(() => {
+    const q = pickerSearch.trim().toLowerCase()
+    if (!q) return availableMilestoneCards
+    return availableMilestoneCards.filter(c =>
+      c.display_id?.toLowerCase().includes(q) ||
+      c.title?.toLowerCase().includes(q)
+    )
+  }, [pickerSearch, availableMilestoneCards])
 
   /* ── Mount effects ── */
   useEffect(() => {
@@ -129,6 +152,8 @@ export default function CardModal({
       if (e.key === 'Escape') {
         if (mentionMenu.open) {
           setMentionMenu(prev => ({ ...prev, open: false }))
+        } else if (showPickerModal) {
+          setShowPickerModal(false)
         } else {
           onClose()
         }
@@ -136,7 +161,7 @@ export default function CardModal({
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onClose, mentionMenu.open])
+  }, [onClose, mentionMenu.open, showPickerModal])
 
   /* ── Comments: Fetch + Realtime ── */
   useEffect(() => {
@@ -242,7 +267,7 @@ export default function CardModal({
   }
 
   function selectMention(targetCard) {
-    const field = mentionMenu.field
+    const field = mentionMenu.field || 'description'
     const currentVal = form[field]
     const textBefore = currentVal.slice(0, mentionMenu.cursorPos)
     const textAfter  = currentVal.slice(mentionMenu.cursorPos)
@@ -252,14 +277,29 @@ export default function CardModal({
 
     setForm(prev => ({ ...prev, [field]: newText }))
     setMentionMenu({ open: false, field: null, query: '', cursorPos: 0, selectedIndex: 0 })
+    setActiveRefCardId(targetCard.id)
     setShowComparison(true)
 
-    // Re-focus input
     if (field === 'title') {
       titleRef.current?.focus()
     } else {
       descRef.current?.focus()
     }
+  }
+
+  function insertReferenceFromPicker(targetCard) {
+    const currentDesc = form.description
+    const separator = currentDesc.length > 0 && !currentDesc.endsWith(' ') && !currentDesc.endsWith('\n') ? ' ' : ''
+    const newDesc = `${currentDesc}${separator}@${targetCard.display_id} `
+
+    setForm(prev => ({ ...prev, description: newDesc }))
+    setActiveRefCardId(targetCard.id)
+    setShowComparison(true)
+    setShowPickerModal(false)
+
+    setTimeout(() => {
+      descRef.current?.focus()
+    }, 50)
   }
 
   function togglePill(field, value) {
@@ -387,7 +427,7 @@ export default function CardModal({
               <div className="card-ref-minimized-banner">
                 <span>
                   Vinculada con <strong>@{referencedCards[0].display_id}</strong>
-                  {referencedCards.length > 1 && ` y ${referencedCards.length - 1} más`}
+                  {referencedCards.length > 1 && ` (+${referencedCards.length - 1} más)`}
                 </span>
                 <button
                   type="button"
@@ -407,7 +447,7 @@ export default function CardModal({
               <div className="form-group" style={{ position: 'relative' }}>
                 <label className="form-label" htmlFor="c-title">
                   Título <span className="required" aria-hidden="true">*</span>
-                  <span className="form-label__hint">Usa @ para vincular tarjetas</span>
+                  <span className="form-label__hint">Escribe @ para vincular tarjetas del hito</span>
                 </label>
                 <input
                   ref={titleRef}
@@ -418,14 +458,14 @@ export default function CardModal({
                   value={form.title}
                   onChange={handleInputChange}
                   onKeyDown={handleInputKeyDown}
-                  placeholder="Resumen claro de la tarea (usa @ para vincular)…"
+                  placeholder="Resumen claro de la tarea…"
                   required
                 />
 
                 {/* Mention Dropdown for Title */}
                 {mentionMenu.open && mentionMenu.field === 'title' && mentionCandidates.length > 0 && (
                   <div className="mention-dropdown">
-                    <div className="mention-dropdown__header">Vincular tarjeta:</div>
+                    <div className="mention-dropdown__header">Tarjetas del hito:</div>
                     {mentionCandidates.map((c, idx) => (
                       <button
                         key={c.id}
@@ -441,11 +481,75 @@ export default function CardModal({
                 )}
               </div>
 
+              {/* Intuitive Milestone Reference Helper Button */}
+              <div className="card-reference-helper">
+                <button
+                  type="button"
+                  className={`btn-link-card-helper${showPickerModal ? ' btn-link-card-helper--active' : ''}`}
+                  onClick={() => setShowPickerModal(prev => !prev)}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  </svg>
+                  {showPickerModal ? 'Ocultar selector de tarjetas' : `+ Vincular tarjeta del hito (${availableMilestoneCards.length} disponibles)`}
+                </button>
+              </div>
+
+              {/* Dedicated Card Picker Panel */}
+              {showPickerModal && (
+                <div className="card-picker-panel animate-fade-in">
+                  <div className="card-picker-panel__header">
+                    <span className="card-picker-panel__title">Elige una tarjeta de este hito para vincular:</span>
+                    <input
+                      type="text"
+                      className="form-input form-input--xs"
+                      placeholder="Buscar por título o ID…"
+                      value={pickerSearch}
+                      onChange={e => setPickerSearch(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="card-picker-panel__list">
+                    {filteredPickerCards.length === 0 ? (
+                      <p className="card-picker-empty">
+                        {availableMilestoneCards.length === 0
+                          ? 'No hay otras tarjetas creadas en este hito todavía.'
+                          : 'No se encontraron tarjetas que coincidan con la búsqueda.'}
+                      </p>
+                    ) : (
+                      filteredPickerCards.map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className="card-picker-item"
+                          onClick={() => insertReferenceFromPicker(c)}
+                        >
+                          <div className="card-picker-item__meta">
+                            <span className="card-picker-item__id">{c.display_id}</span>
+                            <span className={`status-badge status-badge--${c.status}`}>
+                              {STATUSES.find(s => s.id === c.status)?.label ?? c.status}
+                            </span>
+                            {c.primary_type && (
+                              <span className={`badge-primary badge-primary--${c.primary_type.toLowerCase()}`}>
+                                {c.primary_type}
+                              </span>
+                            )}
+                          </div>
+                          <span className="card-picker-item__title">{c.title}</span>
+                          <span className="card-picker-item__action">+ Vincular</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Description with @ mention support */}
               <div className="form-group" style={{ position: 'relative' }}>
                 <label className="form-label" htmlFor="c-desc">
                   Descripción
-                  <span className="form-label__hint">Usa @ para vincular tarjetas</span>
+                  <span className="form-label__hint">Escribe @ para autocompletar</span>
                 </label>
                 <textarea
                   ref={descRef}
@@ -462,7 +566,7 @@ export default function CardModal({
                 {/* Mention Dropdown for Description */}
                 {mentionMenu.open && mentionMenu.field === 'description' && mentionCandidates.length > 0 && (
                   <div className="mention-dropdown">
-                    <div className="mention-dropdown__header">Vincular tarjeta:</div>
+                    <div className="mention-dropdown__header">Tarjetas del hito:</div>
                     {mentionCandidates.map((c, idx) => (
                       <button
                         key={c.id}
@@ -669,7 +773,7 @@ export default function CardModal({
         {/* ── COLUMN 2: Parallel Comparison Column (Active when @mention is present) ── */}
         {hasParallelView && (
           <div className="card-comparison-col">
-            {/* Header with tabs and collapse button */}
+            {/* Header with collapse button */}
             <div className="card-comparison-header">
               <div className="card-comparison-header__info">
                 <span className="card-comparison-header__title">
@@ -679,22 +783,8 @@ export default function CardModal({
                     <path d="M21 3l-7 7" />
                     <path d="M3 21l7-7" />
                   </svg>
-                  Comparando tarjeta vinculada
+                  Comparativa en paralelo
                 </span>
-                {referencedCards.length > 1 && (
-                  <div className="card-comparison-tabs">
-                    {referencedCards.map(rc => (
-                      <button
-                        key={rc.id}
-                        type="button"
-                        className={`card-comparison-tab${rc.id === activeComparisonCard.id ? ' card-comparison-tab--active' : ''}`}
-                        onClick={() => setActiveRefCardId(rc.id)}
-                      >
-                        {rc.display_id}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
 
               <button
@@ -707,6 +797,54 @@ export default function CardModal({
                 Ocultar
               </button>
             </div>
+
+            {/* Prominent High-Visibility Switcher for Multiple Referenced Cards */}
+            {referencedCards.length > 1 && (
+              <div className="card-comparison-switcher">
+                <div className="card-comparison-switcher__top">
+                  <span className="card-comparison-switcher__counter">
+                    Vinculadas: <strong>{activeRefIndex + 1}</strong> de <strong>{referencedCards.length}</strong>
+                  </span>
+                  <div className="card-comparison-switcher__arrows">
+                    <button
+                      type="button"
+                      className="card-comparison-switcher__arrow-btn"
+                      disabled={activeRefIndex === 0}
+                      onClick={() => setActiveRefCardId(referencedCards[activeRefIndex - 1].id)}
+                      title="Tarjeta anterior"
+                    >
+                      ←
+                    </button>
+                    <button
+                      type="button"
+                      className="card-comparison-switcher__arrow-btn"
+                      disabled={activeRefIndex === referencedCards.length - 1}
+                      onClick={() => setActiveRefCardId(referencedCards[activeRefIndex + 1].id)}
+                      title="Siguiente tarjeta"
+                    >
+                      →
+                    </button>
+                  </div>
+                </div>
+
+                <div className="card-comparison-switcher__pills">
+                  {referencedCards.map(rc => {
+                    const isActive = rc.id === activeComparisonCard.id
+                    return (
+                      <button
+                        key={rc.id}
+                        type="button"
+                        className={`card-switcher-item${isActive ? ' card-switcher-item--active' : ''}`}
+                        onClick={() => setActiveRefCardId(rc.id)}
+                      >
+                        <span className="card-switcher-item__id">{rc.display_id}</span>
+                        <span className="card-switcher-item__title">{rc.title}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Comparison card body */}
             <div className="card-comparison-body">

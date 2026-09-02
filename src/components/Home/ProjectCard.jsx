@@ -195,7 +195,10 @@ export default function ProjectCard({ project, onClick, onEdit, onDelete }) {
           {/* Milestone metric */}
           <div className="project-card__metric-item">
             <div className="project-card__metric-label">
-              <span className="project-card__metric-icon" aria-hidden="true">🏁</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" fill="rgba(245, 158, 11, 0.25)" />
+                <line x1="4" y1="22" x2="4" y2="15" />
+              </svg>
               Hitos completados
             </div>
             <div className="project-card__metric-value">
@@ -215,7 +218,9 @@ export default function ProjectCard({ project, onClick, onEdit, onDelete }) {
           {/* Cards metric */}
           <div className="project-card__metric-item">
             <div className="project-card__metric-label">
-              <span className="project-card__metric-icon" aria-hidden="true">✓</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
               Tarjetas completadas
             </div>
             <div className="project-card__metric-value">

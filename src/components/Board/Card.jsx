@@ -16,6 +16,8 @@ export function renderTextWithMentions(text) {
 export default function Card({
   card,
   isDragging,
+  commentCount = 0,
+  hasUnviewedComments = false,
   onEdit,
   onDelete,
   onDragStart,
@@ -38,9 +40,31 @@ export default function Card({
       onKeyDown={e => e.key === 'Enter' && onEdit()}
       aria-label={`${card.display_id} — ${card.title}`}
     >
-      {/* ID + prominent primary badge + secondary/priority badges */}
+      {/* ID + Comment icon + primary badge + secondary/priority badges */}
       <div className="card__meta">
-        <span className="card__display-id">{card.display_id}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flexShrink: 0 }}>
+          <span className="card__display-id">{card.display_id}</span>
+          {commentCount > 0 && (
+            <span
+              className={`card-comment-indicator ${hasUnviewedComments ? 'card-comment-indicator--unread' : 'card-comment-indicator--read'}`}
+              title={`${commentCount} comentario${commentCount !== 1 ? 's' : ''}${hasUnviewedComments ? ' (nuevos sin leer)' : ''}`}
+            >
+              {hasUnviewedComments ? (
+                /* Filled speech bubble (Relleno: sin visualizar) */
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              ) : (
+                /* Outline speech bubble (Contorno: visualizado) */
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              )}
+              <span className="card-comment-count">{commentCount}</span>
+            </span>
+          )}
+        </div>
+
         <div className="card__badges">
           {/* Primary tag: HW or SW (Solid, prominent) */}
           {card.primary_type && (
