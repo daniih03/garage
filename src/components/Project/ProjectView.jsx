@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { fetchRepoCollaboratorsDetails, getStoredProviderToken } from '../../lib/github'
 import MilestoneBar from './MilestoneBar'
 import InviteModal from './InviteModal'
 import EditProjectModal from '../Home/EditProjectModal'
@@ -65,22 +66,96 @@ export default function ProjectView({
   }
 
   async function fetchMembers() {
-    const { data: memberships } = await supabase
-      .from('project_members')
-      .select('user_id')
-      .eq('project_id', project.id)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.provider_token || getStoredProviderToken()
 
-    if (!memberships?.length) { setMembers([]); return }
+      // 1. Fetch GitHub repo collaborators with details (avatars)
+      let ghCollabs = []
+      if (token && project.repo_full_name) {
+        ghCollabs = await fetchRepoCollaboratorsDetails(project.repo_full_name, token)
+      }
 
-    const ids = memberships.map(m => m.user_id)
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, github_username, avatar_url')
-      .in('id', ids)
+      // 2. Fetch Supabase project_members + profiles
+      const { data: memberships } = await supabase
+        .from('project_members')
+        .select('user_id')
+        .eq('project_id', project.id)
 
-    setMembers(
-      (profiles ?? []).map(p => ({ user_id: p.id, github_username: p.github_username, avatar_url: p.avatar_url }))
-    )
+      let dbProfiles = []
+      if (memberships?.length) {
+        const ids = memberships.map(m => m.user_id)
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, github_username, avatar_url')
+          .in('id', ids)
+        dbProfiles = profiles ?? []
+      }
+
+      // 3. Deduplicate and collect all collaborators
+      const map = new Map()
+
+      // Supabase profiles
+      for (const p of dbProfiles) {
+        if (p.github_username) {
+          const uname = p.github_username.toLowerCase()
+          map.set(uname, {
+            user_id: p.id,
+            username: p.github_username,
+            github_username: p.github_username,
+            avatar_url: p.avatar_url || `https://github.com/${p.github_username}.png?size=64`,
+          })
+        }
+      }
+
+      // GitHub repo collaborators (from API)
+      for (const c of ghCollabs) {
+        const uname = c.username.toLowerCase()
+        if (!map.has(uname)) {
+          map.set(uname, {
+            user_id: null,
+            username: c.username,
+            github_username: c.username,
+            avatar_url: c.avatar_url,
+          })
+        }
+      }
+
+      // Stored collaborators on project record
+      if (Array.isArray(project.github_collaborators)) {
+        for (const u of project.github_collaborators) {
+          if (u) {
+            const uname = u.toLowerCase()
+            if (!map.has(uname)) {
+              map.set(uname, {
+                user_id: null,
+                username: u,
+                github_username: u,
+                avatar_url: `https://github.com/${u}.png?size=64`,
+              })
+            }
+          }
+        }
+      }
+
+      // Current user fallback
+      const currentUserLogin = session?.user?.user_metadata?.user_name
+      if (currentUserLogin) {
+        const uname = currentUserLogin.toLowerCase()
+        if (!map.has(uname)) {
+          map.set(uname, {
+            user_id: session.user.id,
+            username: currentUserLogin,
+            github_username: currentUserLogin,
+            avatar_url: session.user.user_metadata?.avatar_url || `https://github.com/${currentUserLogin}.png?size=64`,
+          })
+        }
+      }
+
+      setMembers(Array.from(map.values()))
+    } catch (err) {
+      console.warn('Error fetching project members:', err)
+    }
   }
 
   function handleMilestoneChange({ eventType, new: next, old: prev }) {
@@ -176,29 +251,43 @@ export default function ProjectView({
 
   return (
     <div className="project-view animate-fade-up">
-      {/* Members bar */}
+      {/* Members bar: Collaborators avatars + actions */}
       <div className="members-bar">
-        <div className="members-bar__avatars" aria-label="Miembros del proyecto">
-          {members.map(m => (
-            m.avatar_url
-              ? <img
-                  key={m.user_id}
-                  src={m.avatar_url}
-                  alt={m.github_username}
-                  className="member-avatar"
-                  title={`@${m.github_username}`}
-                />
-              : <div
-                  key={m.user_id}
-                  className="member-avatar member-avatar--placeholder"
-                  title={`@${m.github_username}`}
-                >
-                  {m.github_username?.[0]?.toUpperCase() ?? '?'}
-                </div>
-          ))}
+        <div className="members-bar__left">
+          <div className="members-bar__avatars" aria-label="Colaboradores del proyecto">
+            {members.map(m => (
+              <a
+                key={m.username}
+                href={`https://github.com/${m.username}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="member-avatar-link"
+                title={`@${m.username} en GitHub`}
+                aria-label={`@${m.username}`}
+              >
+                {m.avatar_url ? (
+                  <img
+                    src={m.avatar_url}
+                    alt={m.username}
+                    className="member-avatar"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="member-avatar member-avatar--placeholder">
+                    {m.username?.[0]?.toUpperCase() ?? '?'}
+                  </div>
+                )}
+              </a>
+            ))}
+          </div>
+          {members.length > 0 && (
+            <span className="members-bar__count">
+              {members.length} {members.length === 1 ? 'colaborador' : 'colaboradores'}
+            </span>
+          )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="members-bar__actions">
           <button
             className="btn btn--ghost btn--sm"
             onClick={() => setShowInvite(true)}

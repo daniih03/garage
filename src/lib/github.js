@@ -102,6 +102,27 @@ export async function fetchRepoCollaborators(ownerRepo, token) {
   }
 }
 
+/** Fetch collaborators with full details (username, avatar_url, html_url) */
+export async function fetchRepoCollaboratorsDetails(ownerRepo, token) {
+  const authToken = token || getStoredProviderToken()
+  try {
+    const res = await fetch(`${API}/repos/${ownerRepo}/collaborators?per_page=100`, {
+      headers: headers(authToken),
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    return Array.isArray(data)
+      ? data.map(u => ({
+          username: u.login,
+          avatar_url: u.avatar_url || `https://github.com/${u.login}.png?size=64`,
+          html_url: u.html_url,
+        }))
+      : []
+  } catch {
+    return []
+  }
+}
+
 /**
  * Derive an acronym from a repo name using its consonants (uppercase, max 6).
  * Falls back to the first 4 chars if no consonants are found.
