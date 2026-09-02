@@ -2115,19 +2115,202 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* ============================================================
-   RESPONSIVE
+   RESPONSIVE (MOBILE & TABLET <= 768px)
+   (Desktop styles remain 100% untouched)
    ============================================================ */
 
 @media (max-width: 768px) {
-  .main-content { padding: 16px; }
-  .header       { padding: 0 16px; }
-  .header__username { display: none; }
+  /* App container adjustments for mobile viewports */
+  .app {
+    padding: 8px 10px;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
 
-  .home-header { flex-direction: column; align-items: flex-start; }
+  .main-content {
+    padding: 10px 0 0 0;
+    overflow-x: hidden;
+  }
 
-  .board { flex-direction: column; align-items: stretch; }
-  .column { max-width: 100%; }
+  /* Header on mobile */
+  .header {
+    padding: 0 10px;
+    height: 48px;
+  }
+  .header__brand {
+    gap: 8px;
+    padding: 2px 4px;
+  }
+  .header__logo-img {
+    width: 24px;
+    height: 24px;
+  }
+  .header__brand-name {
+    font-size: 13px;
+    letter-spacing: 0.14em;
+  }
+  .header__breadcrumb-current {
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .header__badge {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+  .header__username {
+    display: none;
+  }
+  .header__avatar {
+    width: 24px;
+    height: 24px;
+  }
 
-  .form-row { flex-direction: column; }
-  .status-selector { flex-direction: column; }
+  /* Home header */
+  .home-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  /* Project View spacing */
+  .project-view {
+    gap: 8px;
+    min-height: 0;
+  }
+
+  /* Members bar on mobile */
+  .members-bar {
+    gap: 8px;
+  }
+  .members-bar__left {
+    gap: 8px;
+  }
+  .member-avatar,
+  .member-avatar--placeholder {
+    width: 26px;
+    height: 26px;
+    margin-left: -6px;
+  }
+  .members-bar__count {
+    font-size: 11px;
+  }
+  .members-bar__actions {
+    gap: 6px;
+  }
+  .members-bar__actions .btn {
+    padding: 4px 8px;
+    font-size: 11px;
+    height: 28px;
+  }
+
+  /* Milestone bar on mobile */
+  .milestone-bar {
+    gap: 8px;
+  }
+  .milestone-bar__tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .milestone-bar__tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .milestone-bar__add {
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+
+  /* Filter bar on mobile */
+  .board-filter-bar {
+    padding: 6px 10px;
+    gap: 8px;
+  }
+  .board-filter-bar__group {
+    gap: 8px;
+  }
+  .filter-pill-section {
+    gap: 5px;
+  }
+  .filter-pill-section__label {
+    font-size: 10px;
+  }
+  .visual-filter-pill {
+    padding: 2px 6px;
+    font-size: 10.5px;
+  }
+  .filter-section-divider {
+    display: none; /* remove awkward vertical pipes when wrapped */
+  }
+  .board-filter-bar__stats {
+    font-size: 10px;
+    width: 100%;
+  }
+
+  /* ── KANBAN BOARD ON MOBILE (Horizontal swipe carousel) ── */
+  .board-wrapper {
+    gap: 8px;
+    min-height: 0;
+    flex: 1;
+  }
+
+  .board {
+    display: flex;
+    flex-direction: row;
+    grid-template-columns: unset;
+    gap: 12px;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
+    align-items: stretch;
+  }
+
+  .column {
+    flex: 0 0 84vw;
+    min-width: 270px;
+    max-width: 320px;
+    scroll-snap-align: center;
+    max-height: calc(100vh - 275px);
+    max-height: calc(100dvh - 275px);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .column:first-child {
+    margin-left: 2px;
+  }
+  .column:last-child {
+    margin-right: 2px;
+  }
+
+  .column__header {
+    padding: 10px 12px;
+  }
+
+  .column__cards {
+    padding: 8px;
+    gap: 8px;
+    overflow-y: auto;
+  }
+
+  .card {
+    padding: 10px;
+  }
+
+  .form-row {
+    flex-direction: column;
+  }
+  .status-selector {
+    flex-direction: column;
+  }
 }
