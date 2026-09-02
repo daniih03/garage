@@ -109,6 +109,13 @@ export default function ProjectView({
     })
   }
 
+  function handleUpdateMilestone(updated) {
+    setMilestones(prev => prev.map(item => item.id === updated.id ? updated : item))
+    if (activeMilestone?.id === updated.id) {
+      onMilestoneChange(updated)
+    }
+  }
+
   async function handleConfirmDeleteProject() {
     const { error } = await supabase.from('projects').delete().eq('id', project.id)
     if (!error && onDeleteProject) {
@@ -178,6 +185,7 @@ export default function ProjectView({
         milestones={milestones}
         activeMilestone={activeMilestone}
         onSelectMilestone={onMilestoneChange}
+        onUpdateMilestone={handleUpdateMilestone}
         onDeleteMilestone={handleDeleteMilestone}
       />
 

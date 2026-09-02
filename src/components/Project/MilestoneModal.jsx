@@ -2,11 +2,20 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 
-export default function MilestoneModal({ project, nextNumber, onClose }) {
-  const [title,  setTitle]  = useState('')
+export default function MilestoneModal({
+  project,
+  milestone = null,
+  nextNumber,
+  onMilestoneUpdated,
+  onClose,
+}) {
+  const isEditing = Boolean(milestone)
+  const [title,  setTitle]  = useState(milestone?.title ?? '')
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState('')
   const inputRef = useRef(null)
+
+  const numToDisplay = milestone?.number ?? nextNumber
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -18,22 +27,40 @@ export default function MilestoneModal({ project, nextNumber, onClose }) {
   async function handleSubmit(e) {
     e.preventDefault()
     const trimmed = title.trim()
-    if (!trimmed) { setError('El nombre del hito es obligatorio.'); return }
+    if (!trimmed) {
+      setError('El nombre del hito es obligatorio.')
+      return
+    }
 
     setSaving(true)
     setError('')
 
-    const { error: dbError } = await supabase.from('milestones').insert({
-      project_id: project.id,
-      number:     nextNumber,
-      title:      trimmed,
-    })
+    if (isEditing) {
+      const { error: dbError } = await supabase
+        .from('milestones')
+        .update({ title: trimmed })
+        .eq('id', milestone.id)
 
-    if (dbError) {
-      setError(dbError.message)
-      setSaving(false)
+      if (dbError) {
+        setError(dbError.message)
+        setSaving(false)
+      } else {
+        onMilestoneUpdated?.({ ...milestone, title: trimmed })
+        onClose()
+      }
     } else {
-      onClose()
+      const { error: dbError } = await supabase.from('milestones').insert({
+        project_id: project.id,
+        number:     nextNumber,
+        title:      trimmed,
+      })
+
+      if (dbError) {
+        setError(dbError.message)
+        setSaving(false)
+      } else {
+        onClose()
+      }
     }
   }
 
@@ -41,7 +68,14 @@ export default function MilestoneModal({ project, nextNumber, onClose }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="milestone-modal-title">
         <div className="modal__header">
-          <h2 className="modal__title" id="milestone-modal-title">Nuevo hito</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="milestone-tab__num" style={{ fontSize: 11, padding: '2px 7px' }}>
+              #{numToDisplay}
+            </span>
+            <h2 className="modal__title" id="milestone-modal-title">
+              {isEditing ? 'Editar hito' : 'Nuevo hito'}
+            </h2>
+          </div>
           <button className="modal__close" onClick={onClose} aria-label="Cerrar">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -52,10 +86,7 @@ export default function MilestoneModal({ project, nextNumber, onClose }) {
         <form className="modal__form" onSubmit={handleSubmit} noValidate>
           <div className="form-group">
             <label className="form-label" htmlFor="milestone-name">
-              Nombre
-              <span className="milestone-num-hint" aria-label={`Número de hito: ${nextNumber}`}>
-                #{nextNumber}
-              </span>
+              Nombre del hito
             </label>
             <input
               ref={inputRef}
@@ -73,7 +104,7 @@ export default function MilestoneModal({ project, nextNumber, onClose }) {
           <div className="modal__footer">
             <button type="button" className="btn btn--ghost" onClick={onClose}>Cancelar</button>
             <button type="submit" className="btn btn--primary" disabled={saving}>
-              {saving ? 'Creando…' : 'Crear hito'}
+              {saving ? 'Guardando…' : isEditing ? 'Guardar cambios' : 'Crear hito'}
             </button>
           </div>
         </form>
