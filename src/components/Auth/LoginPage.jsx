@@ -15,6 +15,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'github',
       options: {
+        scopes: 'repo,read:user',
         redirectTo: REDIRECT_URL,
       },
     })

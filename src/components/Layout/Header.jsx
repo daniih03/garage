@@ -1,7 +1,9 @@
 import { supabase } from '../../lib/supabase'
+import { clearStoredProviderToken } from '../../lib/github'
 
 export default function Header({ user, view, activeProject, onGoHome }) {
   async function handleLogout() {
+    clearStoredProviderToken()
     await supabase.auth.signOut()
   }
 

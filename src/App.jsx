@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
+import { setStoredProviderToken } from './lib/github'
 import LoginPage from './components/Auth/LoginPage'
 import Header from './components/Layout/Header'
 import HomePage from './components/Home/HomePage'
@@ -14,12 +15,20 @@ export default function App() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.provider_token) {
+        setStoredProviderToken(session.provider_token)
+      }
       setSession(session)
       setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => setSession(session)
+      (_event, session) => {
+        if (session?.provider_token) {
+          setStoredProviderToken(session.provider_token)
+        }
+        setSession(session)
+      }
     )
     return () => subscription.unsubscribe()
   }, [])

@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { fetchUserRepos, fetchRepo, fetchRepoCollaborators, getAcronym, parseRepoInput } from '../../lib/github'
+import {
+  fetchUserRepos,
+  fetchRepo,
+  fetchRepoCollaborators,
+  getAcronym,
+  parseRepoInput,
+  getStoredProviderToken,
+} from '../../lib/github'
 
 export default function AddProjectModal({ existingProjects, onClose }) {
   const [repos,       setRepos]       = useState([])
@@ -12,7 +19,7 @@ export default function AddProjectModal({ existingProjects, onClose }) {
   const [saving,      setSaving]      = useState(false)
   const [error,       setError]       = useState('')
 
-  const existingNames = new Set(existingProjects.map(p => p.repo_full_name))
+  const existingNames = new Set(existingProjects.map(p => p.repo_full_name.toLowerCase()))
 
   /* ── Load repos from GitHub API on mount ── */
   useEffect(() => {
@@ -23,14 +30,19 @@ export default function AddProjectModal({ existingProjects, onClose }) {
   }, [onClose])
 
   async function loadRepos() {
+    setLoadingRepos(true)
+    setError('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.provider_token
-      if (!token) { setUseManual(true); setLoadingRepos(false); return }
-      const data = await fetchUserRepos(token)
-      setRepos(data)
-    } catch {
-      setUseManual(true)
+      const token = session?.provider_token || getStoredProviderToken()
+      const username = session?.user?.user_metadata?.user_name
+
+      const data = await fetchUserRepos(token, username)
+      setRepos(data || [])
+      setUseManual(false)
+    } catch (err) {
+      console.warn('Error loading user repos:', err)
+      setRepos([])
     } finally {
       setLoadingRepos(false)
     }
@@ -46,32 +58,34 @@ export default function AddProjectModal({ existingProjects, onClose }) {
     if (!repoData) {
       const ownerRepo = parseRepoInput(manualInput)
       if (!ownerRepo) {
-        setError('Introduce una URL o "propietario/repo" válido.')
+        setError('Introduce una URL o formato "usuario/repo" válido.')
         setSaving(false)
         return
       }
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        repoData = await fetchRepo(ownerRepo, session?.provider_token)
+        const token = session?.provider_token || getStoredProviderToken()
+        repoData = await fetchRepo(ownerRepo, token)
       } catch {
-        setError('Repositorio no encontrado o sin acceso.')
+        setError('Repositorio no encontrado o sin permisos de acceso.')
         setSaving(false)
         return
       }
     }
 
-    if (existingNames.has(repoData.full_name)) {
-      setError('Este repositorio ya está añadido.')
+    if (existingNames.has(repoData.full_name.toLowerCase())) {
+      setError('Este repositorio ya está añadido a Garage.')
       setSaving(false)
       return
     }
 
     const { data: { session } } = await supabase.auth.getSession()
     const user = session?.user
+    const token = session?.provider_token || getStoredProviderToken()
 
     let collabs = []
-    if (session?.provider_token) {
-      collabs = await fetchRepoCollaborators(repoData.full_name, session.provider_token)
+    if (token) {
+      collabs = await fetchRepoCollaborators(repoData.full_name, token)
     }
 
     const collabsList = Array.from(new Set([
@@ -91,11 +105,11 @@ export default function AddProjectModal({ existingProjects, onClose }) {
     })
 
     if (dbError) {
-      // 23505 = unique_violation (repo ya existe)
-      setError(dbError.code === '23505'
-        ? 'Este repositorio ya está añadido a Garage.'
-        : dbError.message
-      )
+      if (dbError.code === '23505') {
+        setError('Este repositorio ya está añadido a Garage.')
+      } else {
+        setError(dbError.message)
+      }
       setSaving(false)
     } else {
       onClose()
@@ -104,7 +118,7 @@ export default function AddProjectModal({ existingProjects, onClose }) {
 
   const filteredRepos = repos.filter(r =>
     r.full_name.toLowerCase().includes(filter.toLowerCase()) &&
-    !existingNames.has(r.full_name)
+    !existingNames.has(r.full_name.toLowerCase())
   )
 
   return (
@@ -121,7 +135,7 @@ export default function AddProjectModal({ existingProjects, onClose }) {
 
         <div className="modal__form">
           {useManual ? (
-            /* ── Manual URL input ── */
+            /* ── Manual URL / input ── */
             <div className="form-group">
               <label className="form-label" htmlFor="manual-repo">URL o nombre del repositorio</label>
               <input
@@ -135,7 +149,7 @@ export default function AddProjectModal({ existingProjects, onClose }) {
                 onKeyDown={e => e.key === 'Enter' && handleAdd()}
               />
               <button type="button" className="toggle-link" onClick={() => { setUseManual(false); loadRepos() }}>
-                Cargar desde mi cuenta de GitHub
+                ← Volver a lista de repositorios
               </button>
             </div>
           ) : loadingRepos ? (
@@ -148,24 +162,54 @@ export default function AddProjectModal({ existingProjects, onClose }) {
           ) : (
             /* ── Repo list ── */
             <>
-              <div className="form-group">
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="Buscar repositorios…"
+                  placeholder="Buscar en mis repositorios…"
                   value={filter}
                   onChange={e => setFilter(e.target.value)}
                   autoFocus
                 />
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={loadRepos}
+                  title="Actualizar lista de repositorios desde GitHub"
+                  aria-label="Actualizar repositorios"
+                  disabled={loadingRepos}
+                  style={{ flexShrink: 0 }}
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    style={{ animation: loadingRepos ? 'spin 0.65s linear infinite' : 'none' }}
+                  >
+                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                  </svg>
+                  Recargar
+                </button>
               </div>
 
               <div className="repo-list">
                 {filteredRepos.length === 0 ? (
-                  <p className="repo-list__empty">
-                    {repos.length === 0
-                      ? 'No se encontraron repositorios en tu cuenta.'
-                      : 'Sin resultados para esa búsqueda.'}
-                  </p>
+                  <div className="repo-list__empty" style={{ padding: '16px 12px', textAlign: 'center' }}>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: 4, fontSize: 13 }}>
+                      {repos.length === 0
+                        ? 'No se encontraron repositorios automáticamente.'
+                        : 'Sin resultados para esa búsqueda.'}
+                    </p>
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                      Si tu repo es privado o lo acabas de crear, puedes pulsar "Recargar" o introducir "usuario/repo" en modo manual.
+                    </p>
+                  </div>
                 ) : (
                   filteredRepos.map(repo => (
                     <button
@@ -185,7 +229,7 @@ export default function AddProjectModal({ existingProjects, onClose }) {
               </div>
 
               <button type="button" className="toggle-link" onClick={() => setUseManual(true)}>
-                Introducir URL manualmente
+                Introducir URL o nombre ("usuario/repo") manualmente
               </button>
             </>
           )}
