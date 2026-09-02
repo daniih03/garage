@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { fetchUserRepos } from '../../lib/github'
 import ProjectCard from './ProjectCard'
 import AddProjectModal from './AddProjectModal'
-import ConfirmModal from '../Common/ConfirmModal'
+import DangerConfirmModal from '../Common/DangerConfirmModal'
 
 export default function HomePage({ onOpenProject }) {
   const [projects,        setProjects]        = useState([])
@@ -159,11 +159,12 @@ export default function HomePage({ onOpenProject }) {
       )}
 
       {projectToDelete && (
-        <ConfirmModal
-          title="¿Eliminar proyecto?"
-          message={`¿Estás seguro de que quieres eliminar el proyecto "${projectToDelete.repo_name}" (${projectToDelete.repo_full_name})? Se eliminarán todos sus hitos y tarjetas de forma permanente.`}
+        <DangerConfirmModal
+          title="¿Eliminar proyecto definitivamente?"
+          targetName={`${projectToDelete.repo_name} (${projectToDelete.repo_full_name})`}
+          targetType="proyecto"
+          message="Se eliminarán todos los hitos, tarjetas, etiquetas, comentarios y miembros de forma irreversible."
           confirmText="Eliminar proyecto"
-          danger={true}
           onConfirm={() => handleDeleteProject(projectToDelete)}
           onClose={() => setProjectToDelete(null)}
         />

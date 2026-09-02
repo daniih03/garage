@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import MilestoneModal from './MilestoneModal'
-import ConfirmModal from '../Common/ConfirmModal'
+import DangerConfirmModal from '../Common/DangerConfirmModal'
 
 export default function MilestoneBar({
   project,
@@ -100,11 +100,12 @@ export default function MilestoneBar({
       )}
 
       {milestoneToDelete && (
-        <ConfirmModal
-          title="¿Eliminar hito?"
-          message={`¿Estás seguro de que quieres eliminar el hito #${milestoneToDelete.number} "${milestoneToDelete.title}"? Se borrarán permanentemente todas las tarjetas contenidas en él.`}
+        <DangerConfirmModal
+          title="¿Eliminar hito definitivamente?"
+          targetName={`Hito #${milestoneToDelete.number}: ${milestoneToDelete.title}`}
+          targetType="hito"
+          message="Se eliminarán todas las tarjetas y tareas contenidas en este hito de forma irreversible."
           confirmText="Eliminar hito"
-          danger={true}
           onConfirm={() => handleConfirmDelete(milestoneToDelete)}
           onClose={() => setMilestoneToDelete(null)}
         />

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import MilestoneBar from './MilestoneBar'
 import InviteModal from './InviteModal'
-import ConfirmModal from '../Common/ConfirmModal'
+import DangerConfirmModal from '../Common/DangerConfirmModal'
 import Board from '../Board/Board'
 
 export default function ProjectView({
@@ -202,11 +202,12 @@ export default function ProjectView({
       )}
 
       {showDeleteProject && (
-        <ConfirmModal
-          title="¿Eliminar proyecto?"
-          message={`¿Estás seguro de que quieres eliminar el proyecto "${project.repo_name}" (${project.repo_full_name})? Se eliminarán todos sus hitos y tarjetas de forma permanente.`}
+        <DangerConfirmModal
+          title="¿Eliminar proyecto definitivamente?"
+          targetName={`${project.repo_name} (${project.repo_full_name})`}
+          targetType="proyecto"
+          message="Se eliminarán todos los hitos, tarjetas, etiquetas, comentarios y miembros de forma irreversible."
           confirmText="Eliminar proyecto"
-          danger={true}
           onConfirm={handleConfirmDeleteProject}
           onClose={() => setShowDeleteProject(false)}
         />
