@@ -33,11 +33,11 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="login-logo">
           <img
-            src={`${import.meta.env.BASE_URL}logos/Command_NOBG_Blanco.png`}
-            alt="Command"
+            src={`${import.meta.env.BASE_URL}logos/Command_NOBG_Blanco_C.png`}
+            alt="Command Garage"
             className="login-logo__img"
-            width="80"
-            height="80"
+            width="88"
+            height="88"
           />
           <span className="login-logo__text">GARAGE</span>
         </div>

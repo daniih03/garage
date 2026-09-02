@@ -12,48 +12,36 @@ export default function Header({ user, view, activeProject, onGoHome }) {
 
   return (
     <header className="header" role="banner">
-      {/* Left side */}
+      {/* Left side: Always shows Garage Brand with Logo */}
       <div className="header__left">
-        {view === 'project' ? (
-          <>
-            <button
-              className="header__back-btn"
-              onClick={onGoHome}
-              aria-label="Volver a proyectos"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
-                aria-hidden="true">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
-            <nav className="header__breadcrumb" aria-label="Ruta">
-              <span
-                className="header__breadcrumb-home"
-                onClick={onGoHome}
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => e.key === 'Enter' && onGoHome()}
-              >
-                Proyectos
+        <button
+          type="button"
+          className="header__brand"
+          onClick={onGoHome}
+          title="Ir a proyectos"
+          aria-label="Garage — Inicio"
+        >
+          <img
+            src={`${import.meta.env.BASE_URL}logos/Command_NOBG_Blanco_C.png`}
+            alt="Command Garage"
+            className="header__logo-img"
+            width="28"
+            height="28"
+          />
+          <span className="header__brand-name">GARAGE</span>
+        </button>
+
+        {view === 'project' && activeProject && (
+          <div className="header__project-nav">
+            <span className="header__breadcrumb-sep" aria-hidden="true">/</span>
+            <nav className="header__breadcrumb" aria-label="Proyecto activo">
+              <span className="header__breadcrumb-current" title={activeProject.repo_name}>
+                {activeProject.repo_name}
               </span>
-              <span className="header__breadcrumb-sep" aria-hidden="true">/</span>
-              <span className="header__breadcrumb-current">{activeProject?.repo_name}</span>
-              <span className="header__badge" aria-label={`Acrónimo: ${activeProject?.repo_acronym}`}>
-                {activeProject?.repo_acronym}
+              <span className="header__badge" aria-label={`Acrónimo: ${activeProject.repo_acronym}`}>
+                {activeProject.repo_acronym}
               </span>
             </nav>
-          </>
-        ) : (
-          <div className="header__brand">
-            <img
-              src={`${import.meta.env.BASE_URL}logos/Command_NOBG_Blanco_C.png`}
-              alt="Command"
-              className="header__logo-img"
-              width="26"
-              height="26"
-            />
-            <span className="header__brand-name">GARAGE</span>
           </div>
         )}
       </div>

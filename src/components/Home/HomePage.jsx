@@ -127,10 +127,10 @@ export default function HomePage({ onOpenProject }) {
         <div className="home-empty animate-fade-up">
           <img
             src={`${import.meta.env.BASE_URL}logos/Command_NOBG_Blanco_C.png`}
-            alt=""
-            width="64"
-            height="64"
-            style={{ opacity: 0.35, objectFit: 'contain' }}
+            alt="Garage"
+            className="home-empty__logo"
+            width="72"
+            height="72"
           />
           <h2 className="home-empty__title">Sin proyectos todavía</h2>
           <p className="home-empty__desc">
