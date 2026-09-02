@@ -267,7 +267,7 @@ export default function CardModal({
                 value={form.description}
                 onChange={handleChange}
                 placeholder="Detalles, objetivos, contexto…"
-                rows={3}
+                rows={2}
               />
             </div>
 
