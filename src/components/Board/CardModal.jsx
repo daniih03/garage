@@ -195,7 +195,8 @@ export default function CardModal({
         .limit(1)
 
       const nextNum  = (maxData?.[0]?.card_number ?? 0) + 1
-      const displayId = `${project.repo_acronym}-${milestone.number}-${String(nextNum).padStart(3, '0')}`
+      const msNum = String(milestone.number).padStart(2, '0')
+      const displayId = `${project.repo_acronym}-${msNum}-${String(nextNum).padStart(3, '0')}`
 
       const position = cardsInStatus.length > 0
         ? Math.max(...cardsInStatus.map(c => c.position)) + 1

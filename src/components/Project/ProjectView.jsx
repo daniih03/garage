@@ -144,7 +144,8 @@ export default function ProjectView({
 
         if (cardsToUpdate && cardsToUpdate.length > 0) {
           for (const card of cardsToUpdate) {
-            const newDisplayId = `${project.repo_acronym}-${newNum}-${String(card.card_number).padStart(3, '0')}`
+            const msPad = String(newNum).padStart(2, '0')
+            const newDisplayId = `${project.repo_acronym}-${msPad}-${String(card.card_number).padStart(3, '0')}`
             await supabase
               .from('cards')
               .update({ display_id: newDisplayId })

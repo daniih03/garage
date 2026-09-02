@@ -85,7 +85,18 @@ export default function Board({ project, milestone }) {
       .eq('milestone_id', milestone.id)
       .order('position', { ascending: true })
 
-    if (!error) setCards(data ?? [])
+    if (!error && data) {
+      // Auto-migrate legacy 1-digit milestone IDs (e.g. GRGTL-1-001 -> GRGTL-01-001)
+      const normalized = data.map(card => {
+        if (card.display_id && /^([A-Z0-9]+)-(\d{1})-(\d{3})$/.test(card.display_id)) {
+          const updatedId = card.display_id.replace(/^([A-Z0-9]+)-(\d{1})-(\d{3})$/, '$1-0$2-$3')
+          supabase.from('cards').update({ display_id: updatedId }).eq('id', card.id).then()
+          return { ...card, display_id: updatedId }
+        }
+        return card
+      })
+      setCards(normalized)
+    }
     setLoading(false)
   }
 
