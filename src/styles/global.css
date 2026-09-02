@@ -489,6 +489,21 @@ a { color: inherit; text-decoration: none; }
   background: var(--bg-input);
 }
 
+.project-card__delete-btn {
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--transition), background-color var(--transition);
+}
+.project-card__delete-btn:hover {
+  color: var(--danger);
+  background: rgba(231, 76, 60, 0.15);
+}
+
 .project-card__body    { padding: 0 18px 14px; flex: 1; }
 .project-card__name    { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
 .project-card__full-name{ font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
@@ -622,13 +637,15 @@ a { color: inherit; text-decoration: none; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px;
+  padding: 6px 12px;
   border-radius: 20px;
   font-size: 12px;
   font-weight: 500;
   color: var(--text-muted);
   border: 1px solid transparent;
   background: transparent;
+  cursor: pointer;
+  user-select: none;
   transition: color var(--transition), background-color var(--transition), border-color var(--transition);
 }
 .milestone-tab:hover {
@@ -646,6 +663,27 @@ a { color: inherit; text-decoration: none; }
   font-family: var(--font-mono);
   font-size: 10px;
   opacity: 0.7;
+}
+
+.milestone-tab__delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  color: var(--text-muted);
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity var(--transition), color var(--transition), background-color var(--transition);
+}
+.milestone-tab:hover .milestone-tab__delete-btn {
+  opacity: 0.85;
+}
+.milestone-tab__delete-btn:hover {
+  opacity: 1;
+  color: var(--danger);
+  background: rgba(231, 76, 60, 0.2);
 }
 
 .milestone-bar__add { flex-shrink: 0; }

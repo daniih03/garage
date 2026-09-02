@@ -2,13 +2,20 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import MilestoneBar from './MilestoneBar'
 import InviteModal from './InviteModal'
+import ConfirmModal from '../Common/ConfirmModal'
 import Board from '../Board/Board'
 
-export default function ProjectView({ project, activeMilestone, onMilestoneChange }) {
-  const [milestones,   setMilestones]   = useState([])
-  const [members,      setMembers]      = useState([])   // [{ user_id, github_username, avatar_url }]
-  const [loading,      setLoading]      = useState(true)
-  const [showInvite,   setShowInvite]   = useState(false)
+export default function ProjectView({
+  project,
+  activeMilestone,
+  onMilestoneChange,
+  onDeleteProject,
+}) {
+  const [milestones,         setMilestones]         = useState([])
+  const [members,            setMembers]            = useState([])
+  const [loading,            setLoading]            = useState(true)
+  const [showInvite,         setShowInvite]         = useState(false)
+  const [showDeleteProject,  setShowDeleteProject]  = useState(false)
 
   useEffect(() => {
     fetchAll()
@@ -55,7 +62,6 @@ export default function ProjectView({ project, activeMilestone, onMilestoneChang
   }
 
   async function fetchMembers() {
-    // 1. Get user_ids from project_members
     const { data: memberships } = await supabase
       .from('project_members')
       .select('user_id')
@@ -63,7 +69,6 @@ export default function ProjectView({ project, activeMilestone, onMilestoneChang
 
     if (!memberships?.length) { setMembers([]); return }
 
-    // 2. Fetch profiles for those user_ids
     const ids = memberships.map(m => m.user_id)
     const { data: profiles } = await supabase
       .from('profiles')
@@ -94,6 +99,23 @@ export default function ProjectView({ project, activeMilestone, onMilestoneChang
     })
   }
 
+  function handleDeleteMilestone(m) {
+    setMilestones(prev => {
+      const remaining = prev.filter(item => item.id !== m.id)
+      if (activeMilestone?.id === m.id) {
+        onMilestoneChange(remaining[0] ?? null)
+      }
+      return remaining
+    })
+  }
+
+  async function handleConfirmDeleteProject() {
+    const { error } = await supabase.from('projects').delete().eq('id', project.id)
+    if (!error && onDeleteProject) {
+      onDeleteProject()
+    }
+  }
+
   if (loading) {
     return <div className="board-loading"><div className="loading-spinner" /></div>
   }
@@ -121,16 +143,34 @@ export default function ProjectView({ project, activeMilestone, onMilestoneChang
                 </div>
           ))}
         </div>
-        <button
-          className="btn btn--ghost btn--sm"
-          onClick={() => setShowInvite(true)}
-          aria-label="Invitar colaborador"
-        >
-          <svg width="13" height="13" viewBox="0 0 15 15" fill="none" aria-hidden="true">
-            <path d="M7.5 2v11M2 7.5h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-          </svg>
-          Invitar
-        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            className="btn btn--ghost btn--sm"
+            onClick={() => setShowInvite(true)}
+            aria-label="Invitar colaborador"
+          >
+            <svg width="13" height="13" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+              <path d="M7.5 2v11M2 7.5h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+            Invitar
+          </button>
+          <button
+            className="btn btn--ghost btn--sm"
+            style={{ color: 'var(--danger)', borderColor: 'rgba(231,76,60,0.25)' }}
+            onClick={() => setShowDeleteProject(true)}
+            aria-label="Eliminar proyecto"
+            title="Eliminar proyecto"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6M14 11v6" />
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+            </svg>
+            Eliminar proyecto
+          </button>
+        </div>
       </div>
 
       <MilestoneBar
@@ -138,6 +178,7 @@ export default function ProjectView({ project, activeMilestone, onMilestoneChang
         milestones={milestones}
         activeMilestone={activeMilestone}
         onSelectMilestone={onMilestoneChange}
+        onDeleteMilestone={handleDeleteMilestone}
       />
 
       {milestones.length === 0 ? (
@@ -157,6 +198,17 @@ export default function ProjectView({ project, activeMilestone, onMilestoneChang
           project={project}
           currentMembers={members}
           onClose={() => setShowInvite(false)}
+        />
+      )}
+
+      {showDeleteProject && (
+        <ConfirmModal
+          title="¿Eliminar proyecto?"
+          message={`¿Estás seguro de que quieres eliminar el proyecto "${project.repo_name}" (${project.repo_full_name})? Se eliminarán todos sus hitos y tarjetas de forma permanente.`}
+          confirmText="Eliminar proyecto"
+          danger={true}
+          onConfirm={handleConfirmDeleteProject}
+          onClose={() => setShowDeleteProject(false)}
         />
       )}
     </div>

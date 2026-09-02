@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import Column from './Column'
 import CardModal from './CardModal'
+import ConfirmModal from '../Common/ConfirmModal'
 
 const COLUMNS = [
   { id: 'todo',       label: 'Por hacer',   color: '#9E9E9E' },
@@ -10,10 +11,11 @@ const COLUMNS = [
 ]
 
 export default function Board({ project, milestone }) {
-  const [cards,      setCards]      = useState([])
-  const [loading,    setLoading]    = useState(true)
-  const [modal,      setModal]      = useState({ open: false, card: null, defaultStatus: 'todo' })
-  const [draggingId, setDraggingId] = useState(null)
+  const [cards,        setCards]        = useState([])
+  const [loading,      setLoading]      = useState(true)
+  const [modal,        setModal]        = useState({ open: false, card: null, defaultStatus: 'todo' })
+  const [draggingId,   setDraggingId]   = useState(null)
+  const [cardToDelete, setCardToDelete] = useState(null)
 
   /* ── Fetch + Realtime ── */
   useEffect(() => {
@@ -100,7 +102,7 @@ export default function Board({ project, milestone }) {
             draggingId={draggingId}
             onAddCard={() => setModal({ open: true, card: null, defaultStatus: col.id })}
             onEditCard={card => setModal({ open: true, card, defaultStatus: card.status })}
-            onDeleteCard={handleDelete}
+            onDeleteCard={card => setCardToDelete(card)}
             onDrop={handleDrop}
             onDragStart={setDraggingId}
             onDragEnd={() => setDraggingId(null)}
@@ -117,7 +119,22 @@ export default function Board({ project, milestone }) {
           cardsInStatus={cards.filter(c =>
             c.status === (modal.card?.status ?? modal.defaultStatus)
           )}
+          onDeleteCard={handleDelete}
           onClose={() => setModal({ open: false, card: null, defaultStatus: 'todo' })}
+        />
+      )}
+
+      {cardToDelete && (
+        <ConfirmModal
+          title="¿Eliminar tarjeta?"
+          message={`¿Estás seguro de que quieres eliminar la tarjeta "${cardToDelete.display_id} — ${cardToDelete.title}"? Esta acción no se puede deshacer.`}
+          confirmText="Eliminar tarjeta"
+          danger={true}
+          onConfirm={() => {
+            handleDelete(cardToDelete.id)
+            setCardToDelete(null)
+          }}
+          onClose={() => setCardToDelete(null)}
         />
       )}
     </>

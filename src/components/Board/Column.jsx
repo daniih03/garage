@@ -81,7 +81,7 @@ export default function Column({
             card={card}
             isDragging={draggingId === card.id}
             onEdit={() => onEditCard(card)}
-            onDelete={() => onDeleteCard(card.id)}
+            onDelete={() => onDeleteCard(card)}
             onDragStart={() => onDragStart(card.id)}
             onDragEnd={onDragEnd}
           />

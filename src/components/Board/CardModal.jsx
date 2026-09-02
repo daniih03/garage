@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import ConfirmModal from '../Common/ConfirmModal'
 
 const STATUSES = [
   { id: 'todo',       label: 'Por hacer'   },
@@ -23,6 +24,7 @@ export default function CardModal({
   project,
   milestone,
   cardsInStatus,
+  onDeleteCard,
   onClose,
 }) {
   const isEditing = Boolean(card)
@@ -39,6 +41,7 @@ export default function CardModal({
   })
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   /* ── Comments state ── */
   const [comments,     setComments]     = useState([])
@@ -350,6 +353,27 @@ export default function CardModal({
 
             {/* Footer */}
             <div className="modal__footer">
+              {isEditing && (
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  style={{
+                    color: 'var(--danger)',
+                    borderColor: 'rgba(231,76,60,0.3)',
+                    marginRight: 'auto',
+                  }}
+                  onClick={() => setShowDeleteConfirm(true)}
+                  aria-label="Eliminar tarjeta"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginRight: 4 }}>
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    <path d="M10 11v6M14 11v6" />
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                  </svg>
+                  Eliminar tarjeta
+                </button>
+              )}
               <button type="button" className="btn btn--ghost" onClick={onClose}>Cancelar</button>
               <button type="submit" className="btn btn--primary" disabled={saving}>
                 {saving ? 'Guardando…' : isEditing ? 'Actualizar' : 'Crear tarjeta'}
@@ -424,6 +448,20 @@ export default function CardModal({
           )}
         </div>
       </div>
+
+      {showDeleteConfirm && (
+        <ConfirmModal
+          title="¿Eliminar tarjeta?"
+          message={`¿Estás seguro de que quieres eliminar la tarjeta "${card.display_id} — ${card.title}"? Esta acción no se puede deshacer.`}
+          confirmText="Eliminar tarjeta"
+          danger={true}
+          onConfirm={() => {
+            onDeleteCard?.(card.id)
+            onClose()
+          }}
+          onClose={() => setShowDeleteConfirm(false)}
+        />
+      )}
     </div>
   )
 }

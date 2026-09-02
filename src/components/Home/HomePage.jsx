@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import ProjectCard from './ProjectCard'
 import AddProjectModal from './AddProjectModal'
+import ConfirmModal from '../Common/ConfirmModal'
 
 export default function HomePage({ onOpenProject }) {
-  const [projects, setProjects] = useState([])
-  const [loading,  setLoading]  = useState(true)
-  const [showModal, setShowModal] = useState(false)
+  const [projects,        setProjects]        = useState([])
+  const [loading,         setLoading]         = useState(true)
+  const [showModal,       setShowModal]       = useState(false)
+  const [projectToDelete, setProjectToDelete] = useState(null)
 
   useEffect(() => {
     fetchProjects()
@@ -40,6 +42,12 @@ export default function HomePage({ onOpenProject }) {
         default: return current
       }
     })
+  }
+
+  async function handleDeleteProject(proj) {
+    setProjects(current => current.filter(p => p.id !== proj.id))
+    const { error } = await supabase.from('projects').delete().eq('id', proj.id)
+    if (error) fetchProjects()
   }
 
   if (loading) {
@@ -100,6 +108,7 @@ export default function HomePage({ onOpenProject }) {
               key={project.id}
               project={project}
               onClick={() => onOpenProject(project)}
+              onDelete={() => setProjectToDelete(project)}
             />
           ))}
         </div>
@@ -109,6 +118,17 @@ export default function HomePage({ onOpenProject }) {
         <AddProjectModal
           existingProjects={projects}
           onClose={() => setShowModal(false)}
+        />
+      )}
+
+      {projectToDelete && (
+        <ConfirmModal
+          title="¿Eliminar proyecto?"
+          message={`¿Estás seguro de que quieres eliminar el proyecto "${projectToDelete.repo_name}" (${projectToDelete.repo_full_name})? Se eliminarán todos sus hitos y tarjetas de forma permanente.`}
+          confirmText="Eliminar proyecto"
+          danger={true}
+          onConfirm={() => handleDeleteProject(projectToDelete)}
+          onClose={() => setProjectToDelete(null)}
         />
       )}
     </div>
