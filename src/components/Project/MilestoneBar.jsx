@@ -19,9 +19,8 @@ export default function MilestoneBar({
 
   async function handleConfirmDelete(m) {
     if (onDeleteMilestone) {
-      onDeleteMilestone(m)
+      await onDeleteMilestone(m)
     }
-    await supabase.from('milestones').delete().eq('id', m.id)
   }
 
   return (

@@ -102,14 +102,57 @@ export default function ProjectView({
     })
   }
 
-  function handleDeleteMilestone(m) {
-    setMilestones(prev => {
-      const remaining = prev.filter(item => item.id !== m.id)
-      if (activeMilestone?.id === m.id) {
-        onMilestoneChange(remaining[0] ?? null)
+  async function handleDeleteMilestone(m) {
+    // 1. Calculate sequentially renumbered milestones
+    const remaining = milestones
+      .filter(item => item.id !== m.id)
+      .sort((a, b) => a.number - b.number)
+
+    const renumbered = remaining.map((item, idx) => ({
+      ...item,
+      number: idx + 1,
+    }))
+
+    // 2. Select next active milestone
+    let nextActive = null
+    if (activeMilestone?.id === m.id) {
+      nextActive = renumbered[0] ?? null
+    } else {
+      nextActive = renumbered.find(item => item.id === activeMilestone?.id) ?? null
+    }
+
+    setMilestones(renumbered)
+    onMilestoneChange(nextActive)
+
+    // 3. Delete deleted milestone from DB
+    await supabase.from('milestones').delete().eq('id', m.id)
+
+    // 4. Update subsequent milestones and their cards display_ids in DB
+    for (let i = 0; i < remaining.length; i++) {
+      const item = remaining[i]
+      const newNum = i + 1
+      if (item.number !== newNum) {
+        await supabase
+          .from('milestones')
+          .update({ number: newNum })
+          .eq('id', item.id)
+
+        const { data: cardsToUpdate } = await supabase
+          .from('cards')
+          .select('id, card_number')
+          .eq('milestone_id', item.id)
+
+        if (cardsToUpdate && cardsToUpdate.length > 0) {
+          for (const card of cardsToUpdate) {
+            const newDisplayId = `${project.repo_acronym}-${newNum}-${String(card.card_number).padStart(3, '0')}`
+            await supabase
+              .from('cards')
+              .update({ display_id: newDisplayId })
+              .eq('id', card.id)
+          }
+        }
       }
-      return remaining
-    })
+    }
   }
 
   function handleUpdateMilestone(updated) {

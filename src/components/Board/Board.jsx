@@ -3,7 +3,6 @@ import { supabase } from '../../lib/supabase'
 import Column from './Column'
 import CardModal from './CardModal'
 import ConfirmModal from '../Common/ConfirmModal'
-import FilterPopover from './FilterPopover'
 
 const COLUMNS = [
   { id: 'todo',    label: 'To do',   color: '#71717A' },
@@ -20,25 +19,22 @@ const PRIORITY_ORDER = {
 }
 
 const PRIMARY_OPTIONS = [
-  { id: 'all', label: 'Todos los primarios', shortLabel: 'Todos' },
-  { id: 'HW',  label: 'Hardware (HW)',      shortLabel: 'HW',    color: '#F59E0B' },
-  { id: 'SW',  label: 'Software (SW)',      shortLabel: 'SW',    color: '#0284C7' },
+  { id: 'HW', label: 'HW', title: 'Hardware', color: '#F59E0B' },
+  { id: 'SW', label: 'SW', title: 'Software', color: '#0284C7' },
 ]
 
 const SECONDARY_OPTIONS = [
-  { id: 'all',   label: 'Todos los secundarios', shortLabel: 'Todos' },
-  { id: 'task',  label: 'Task',                  shortLabel: 'Task',  color: '#38BDF8' },
-  { id: 'bug',   label: 'Bug',                   shortLabel: 'Bug',   color: '#EF4444' },
-  { id: 'spike', label: 'Spike',                 shortLabel: 'Spike', color: '#A855F7' },
-  { id: 'stock', label: 'Stock',                 shortLabel: 'Stock', color: '#10B981' },
+  { id: 'task',  label: 'Task',  color: '#38BDF8' },
+  { id: 'bug',   label: 'Bug',   color: '#EF4444' },
+  { id: 'spike', label: 'Spike', color: '#A855F7' },
+  { id: 'stock', label: 'Stock', color: '#10B981' },
 ]
 
 const PRIORITY_OPTIONS = [
-  { id: 'all',      label: 'Todas las prioridades', shortLabel: 'Todas' },
-  { id: 'critical', label: 'Critical',              shortLabel: 'Critical', color: '#DC2626' },
-  { id: 'high',     label: 'High',                  shortLabel: 'High',     color: '#F97316' },
-  { id: 'mid',      label: 'Mid',                   shortLabel: 'Mid',      color: '#0EA5E9' },
-  { id: 'low',      label: 'Low',                   shortLabel: 'Low',      color: '#94A3B8' },
+  { id: 'critical', label: 'Critical', color: '#DC2626' },
+  { id: 'high',     label: 'High',     color: '#F97316' },
+  { id: 'mid',      label: 'Mid',      color: '#0EA5E9' },
+  { id: 'low',      label: 'Low',      color: '#94A3B8' },
 ]
 
 function compareCardsByPriority(a, b) {
@@ -47,7 +43,6 @@ function compareCardsByPriority(a, b) {
   if (weightB !== weightA) {
     return weightB - weightA // Higher priority first
   }
-  // Secondary sort by position
   return (a.position ?? 0) - (b.position ?? 0)
 }
 
@@ -59,9 +54,12 @@ export default function Board({ project, milestone }) {
   const [cardToDelete,    setCardToDelete]    = useState(null)
 
   /* ── Filter state ── */
-  const [primaryFilter,   setPrimaryFilter]   = useState('all') // 'all' | 'HW' | 'SW'
-  const [secondaryFilter, setSecondaryFilter] = useState('all') // 'all' | 'task' | 'bug' | 'spike' | 'stock'
-  const [priorityFilter,  setPriorityFilter]  = useState('all') // 'all' | 'critical' | 'high' | 'mid' | 'low'
+  // Single select (or null): 'HW' | 'SW' | null
+  const [primaryFilter,    setPrimaryFilter]    = useState(null)
+  // Multi-select (or empty): ['task', 'bug', ...]
+  const [secondaryFilters, setSecondaryFilters] = useState([])
+  // Multi-select (or empty): ['critical', 'high', ...]
+  const [priorityFilters,  setPriorityFilters]  = useState([])
 
   /* ── Fetch + Realtime ── */
   useEffect(() => {
@@ -127,32 +125,66 @@ export default function Board({ project, milestone }) {
     if (error) fetchCards()
   }
 
-  /* ── Filtering + Auto Priority Sorting ── */
-  const hasActiveFilters = primaryFilter !== 'all' || secondaryFilter !== 'all' || priorityFilter !== 'all'
-  const activeCount = (primaryFilter !== 'all' ? 1 : 0) +
-                      (secondaryFilter !== 'all' ? 1 : 0) +
-                      (priorityFilter !== 'all' ? 1 : 0)
-
-  function clearFilters() {
-    setPrimaryFilter('all')
-    setSecondaryFilter('all')
-    setPriorityFilter('all')
+  /* ── Toggle Filters ── */
+  function togglePrimary(id) {
+    // Single select or none: toggle off if already selected
+    setPrimaryFilter(prev => prev === id ? null : id)
   }
+
+  function toggleSecondary(id) {
+    // Multi select: toggle in/out of array
+    setSecondaryFilters(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    )
+  }
+
+  function togglePriority(id) {
+    // Multi select: toggle in/out of array
+    setPriorityFilters(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    )
+  }
+
+  function clearAllFilters() {
+    setPrimaryFilter(null)
+    setSecondaryFilters([])
+    setPriorityFilters([])
+  }
+
+  const hasActiveFilters = Boolean(
+    primaryFilter !== null ||
+    secondaryFilters.length > 0 ||
+    priorityFilters.length > 0
+  )
+
+  const activeCount =
+    (primaryFilter !== null ? 1 : 0) +
+    secondaryFilters.length +
+    priorityFilters.length
 
   const filteredCards = useMemo(() => {
     return cards.filter(card => {
-      if (primaryFilter !== 'all' && card.primary_type !== primaryFilter) {
+      // Primary filter (single-select or all)
+      if (primaryFilter !== null && card.primary_type !== primaryFilter) {
         return false
       }
-      if (secondaryFilter !== 'all' && card.secondary_type?.toLowerCase() !== secondaryFilter) {
-        return false
+      // Secondary filter (multi-select: match ANY of selected, or all if empty)
+      if (secondaryFilters.length > 0) {
+        const cSec = card.secondary_type?.toLowerCase()
+        if (!secondaryFilters.includes(cSec)) {
+          return false
+        }
       }
-      if (priorityFilter !== 'all' && card.priority?.toLowerCase() !== priorityFilter) {
-        return false
+      // Priority filter (multi-select: match ANY of selected, or all if empty)
+      if (priorityFilters.length > 0) {
+        const cPrio = card.priority?.toLowerCase()
+        if (!priorityFilters.includes(cPrio)) {
+          return false
+        }
       }
       return true
     })
-  }, [cards, primaryFilter, secondaryFilter, priorityFilter])
+  }, [cards, primaryFilter, secondaryFilters, priorityFilters])
 
   if (loading) {
     return (
@@ -164,61 +196,89 @@ export default function Board({ project, milestone }) {
 
   return (
     <div className="board-wrapper">
-      {/* ── Sleek Command Filter Bar ── */}
+      {/* ── Visual Inline Filter Bar ── */}
       <div className={`board-filter-bar${hasActiveFilters ? ' has-filters-active' : ''}`}>
         <div className="board-filter-bar__group">
-          {/* Filter Popover: Primario */}
-          <FilterPopover
-            label="Primario"
-            icon={(
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="4" y="4" width="16" height="16" rx="2" />
-                <rect x="9" y="9" width="6" height="6" />
-                <line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" />
-                <line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" />
-                <line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="15" x2="23" y2="15" />
-                <line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="15" x2="4" y2="15" />
-              </svg>
-            )}
-            value={primaryFilter}
-            options={PRIMARY_OPTIONS}
-            onChange={setPrimaryFilter}
-          />
+          {/* Section 1: Primario (Single select) */}
+          <div className="filter-pill-section">
+            <span className="filter-pill-section__label">Primario</span>
+            <div className="filter-pill-section__pills" role="group" aria-label="Filtro primario">
+              {PRIMARY_OPTIONS.map(opt => {
+                const isSelected = primaryFilter === opt.id
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    title={opt.title}
+                    className={`visual-filter-pill visual-filter-pill--${opt.id.toLowerCase()}${isSelected ? ' is-active' : ''}`}
+                    style={isSelected ? { '--pill-color': opt.color } : {}}
+                    onClick={() => togglePrimary(opt.id)}
+                    aria-pressed={isSelected}
+                  >
+                    <span className="visual-filter-pill__dot" style={{ backgroundColor: opt.color }} aria-hidden="true" />
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
 
-          {/* Filter Popover: Secundario */}
-          <FilterPopover
-            label="Secundario"
-            icon={(
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-                <line x1="7" y1="7" x2="7.01" y2="7" />
-              </svg>
-            )}
-            value={secondaryFilter}
-            options={SECONDARY_OPTIONS}
-            onChange={setSecondaryFilter}
-          />
+          <div className="filter-section-divider" aria-hidden="true" />
 
-          {/* Filter Popover: Prioridad */}
-          <FilterPopover
-            label="Prioridad"
-            icon={(
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-                <line x1="4" y1="22" x2="4" y2="15" />
-              </svg>
-            )}
-            value={priorityFilter}
-            options={PRIORITY_OPTIONS}
-            onChange={setPriorityFilter}
-          />
+          {/* Section 2: Secundario (Multi-select) */}
+          <div className="filter-pill-section">
+            <span className="filter-pill-section__label">Secundario</span>
+            <div className="filter-pill-section__pills" role="group" aria-label="Filtro secundario">
+              {SECONDARY_OPTIONS.map(opt => {
+                const isSelected = secondaryFilters.includes(opt.id)
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`visual-filter-pill visual-filter-pill--${opt.id}${isSelected ? ' is-active' : ''}`}
+                    style={isSelected ? { '--pill-color': opt.color } : {}}
+                    onClick={() => toggleSecondary(opt.id)}
+                    aria-pressed={isSelected}
+                  >
+                    <span className="visual-filter-pill__dot" style={{ backgroundColor: opt.color }} aria-hidden="true" />
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
 
-          {/* Clear button if any filter is active */}
+          <div className="filter-section-divider" aria-hidden="true" />
+
+          {/* Section 3: Prioridad (Multi-select) */}
+          <div className="filter-pill-section">
+            <span className="filter-pill-section__label">Prioridad</span>
+            <div className="filter-pill-section__pills" role="group" aria-label="Filtro de prioridad">
+              {PRIORITY_OPTIONS.map(opt => {
+                const isSelected = priorityFilters.includes(opt.id)
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`visual-filter-pill visual-filter-pill--${opt.id}${isSelected ? ' is-active' : ''}`}
+                    style={isSelected ? { '--pill-color': opt.color } : {}}
+                    onClick={() => togglePriority(opt.id)}
+                    aria-pressed={isSelected}
+                  >
+                    <span className="visual-filter-pill__dot" style={{ backgroundColor: opt.color }} aria-hidden="true" />
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Clear all button */}
           {hasActiveFilters && (
             <button
               type="button"
               className="board-filter-clear-btn"
-              onClick={clearFilters}
+              onClick={clearAllFilters}
               title="Restablecer todos los filtros"
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -236,7 +296,7 @@ export default function Board({ project, milestone }) {
             </span>
           ) : (
             <span className="filter-stats-text">
-              {cards.length} {cards.length === 1 ? 'tarjeta' : 'tarjetas'}
+              {cards.length} {cards.length === 1 ? 'tarjeta' : 'tarjetas'} ordenadas por prioridad
             </span>
           )}
         </div>
