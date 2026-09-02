@@ -77,6 +77,20 @@ CREATE POLICY "Miembros añaden miembros" ON project_members
     )
   );
 
+-- Members can remove themselves (leave) or project creator can remove others (kick)
+CREATE POLICY "Salir o expulsar miembros" ON project_members
+  FOR DELETE USING (
+    -- Leaving: removing yourself
+    user_id = auth.uid()
+    OR
+    -- Kicking: you are the project creator
+    EXISTS (
+      SELECT 1 FROM projects p
+      WHERE p.id = project_members.project_id
+        AND p.created_by = auth.uid()
+    )
+  );
+
 -- Auto-añadir creador y colaboradores conocidos al crear un proyecto
 CREATE OR REPLACE FUNCTION auto_add_known_collaborators()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$

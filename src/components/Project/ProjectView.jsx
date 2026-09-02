@@ -16,12 +16,16 @@ export default function ProjectView({
 }) {
   const [milestones,         setMilestones]         = useState([])
   const [members,            setMembers]            = useState([])
+  const [currentUser,        setCurrentUser]        = useState(null)
   const [loading,            setLoading]            = useState(true)
   const [refreshing,         setRefreshing]         = useState(false)
   const [refreshKey,         setRefreshKey]         = useState(0)
   const [showInvite,         setShowInvite]         = useState(false)
   const [showEditProject,    setShowEditProject]    = useState(false)
   const [showDeleteProject,  setShowDeleteProject]  = useState(false)
+  const [memberToKick,       setMemberToKick]       = useState(null)
+  const [showLeaveConfirm,   setShowLeaveConfirm]   = useState(false)
+  const [kickError,          setKickError]          = useState('')
 
   async function handleRefresh() {
     if (refreshing) return
@@ -82,6 +86,8 @@ export default function ProjectView({
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.provider_token || getStoredProviderToken()
+      const sessionUser = session?.user || null
+      if (sessionUser && !currentUser) setCurrentUser(sessionUser)
 
       // 1. Fetch GitHub repo collaborators with details (avatars)
       let ghCollabs = []
@@ -258,6 +264,37 @@ export default function ProjectView({
     }
   }
 
+  async function handleKickMember() {
+    if (!memberToKick?.user_id) return
+    setKickError('')
+    const { error } = await supabase
+      .from('project_members')
+      .delete()
+      .eq('project_id', project.id)
+      .eq('user_id', memberToKick.user_id)
+
+    if (error) {
+      setKickError('No se pudo expulsar al colaborador: ' + error.message)
+    } else {
+      setMembers(prev => prev.filter(m => m.user_id !== memberToKick.user_id))
+      setMemberToKick(null)
+    }
+  }
+
+  async function handleLeaveProject() {
+    if (!currentUser) return
+    const { error } = await supabase
+      .from('project_members')
+      .delete()
+      .eq('project_id', project.id)
+      .eq('user_id', currentUser.id)
+
+    if (!error && onDeleteProject) {
+      onDeleteProject()
+    }
+    setShowLeaveConfirm(false)
+  }
+
   if (loading) {
     return <div className="board-loading"><div className="loading-spinner" /></div>
   }
@@ -268,30 +305,47 @@ export default function ProjectView({
       <div className="members-bar">
         <div className="members-bar__left">
           <div className="members-bar__avatars" aria-label="Colaboradores del proyecto">
-            {members.map(m => (
-              <a
-                key={m.username}
-                href={`https://github.com/${m.username}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="member-avatar-link"
-                title={`@${m.username} en GitHub`}
-                aria-label={`@${m.username}`}
-              >
-                {m.avatar_url ? (
-                  <img
-                    src={m.avatar_url}
-                    alt={m.username}
-                    className="member-avatar"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="member-avatar member-avatar--placeholder">
-                    {m.username?.[0]?.toUpperCase() ?? '?'}
-                  </div>
-                )}
-              </a>
-            ))}
+            {members.map(m => {
+              const isSelf = m.user_id && currentUser && m.user_id === currentUser.id
+              const isProjectOwner = project.created_by === currentUser?.id
+              const canKick = isProjectOwner && !isSelf && m.user_id
+
+              return (
+                <div key={m.username} className="member-avatar-wrap" title={isSelf ? `@${m.username} (tú)` : `@${m.username}`}>
+                  <a
+                    href={`https://github.com/${m.username}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`member-avatar-link${isSelf ? ' member-avatar-link--self' : ''}`}
+                    aria-label={`@${m.username}`}
+                  >
+                    {m.avatar_url ? (
+                      <img
+                        src={m.avatar_url}
+                        alt={m.username}
+                        className="member-avatar"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="member-avatar member-avatar--placeholder">
+                        {m.username?.[0]?.toUpperCase() ?? '?'}
+                      </div>
+                    )}
+                  </a>
+                  {canKick && (
+                    <button
+                      type="button"
+                      className="member-kick-btn"
+                      title={`Expulsar a @${m.username}`}
+                      aria-label={`Expulsar a @${m.username}`}
+                      onClick={() => setMemberToKick(m)}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )
+            })}
           </div>
           {members.length > 0 && (
             <span className="members-bar__count">
@@ -336,6 +390,25 @@ export default function ProjectView({
             </svg>
             Invitar
           </button>
+
+          {/* Leave project — only non-owners can see this */}
+          {currentUser && project.created_by !== currentUser.id && (
+            <button
+              className="btn btn--ghost btn--sm"
+              style={{ color: '#F59E0B', borderColor: 'rgba(245, 158, 11, 0.35)' }}
+              onClick={() => setShowLeaveConfirm(true)}
+              aria-label="Salir del proyecto"
+              title="Salir del proyecto"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              Salir
+            </button>
+          )}
+
           <button
             className="btn btn--ghost btn--sm"
             onClick={() => setShowEditProject(true)}
@@ -415,6 +488,72 @@ export default function ProjectView({
           onConfirm={handleConfirmDeleteProject}
           onClose={() => setShowDeleteProject(false)}
         />
+      )}
+
+      {/* Kick member confirmation */}
+      {memberToKick && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setMemberToKick(null)}>
+          <div className="modal modal--sm" role="dialog" aria-modal="true">
+            <div className="modal__header">
+              <h2 className="modal__title">¿Expulsar colaborador?</h2>
+              <button className="modal__close" onClick={() => setMemberToKick(null)} aria-label="Cerrar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div className="modal__form" style={{ padding: '0 20px 8px' }}>
+              <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                ¿Estás seguro de que quieres expulsar a <strong>@{memberToKick.username}</strong> del proyecto?
+                Perderá el acceso a todos los hitos y tarjetas.
+              </p>
+              {kickError && <p className="form-error" role="alert">{kickError}</p>}
+            </div>
+            <div className="modal__footer">
+              <button type="button" className="btn btn--ghost" onClick={() => setMemberToKick(null)}>Cancelar</button>
+              <button
+                type="button"
+                className="btn btn--danger"
+                onClick={handleKickMember}
+              >
+                Expulsar colaborador
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave project confirmation */}
+      {showLeaveConfirm && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowLeaveConfirm(false)}>
+          <div className="modal modal--sm" role="dialog" aria-modal="true">
+            <div className="modal__header">
+              <h2 className="modal__title">¿Salir del proyecto?</h2>
+              <button className="modal__close" onClick={() => setShowLeaveConfirm(false)} aria-label="Cerrar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div className="modal__form" style={{ padding: '0 20px 8px' }}>
+              <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                ¿Estás seguro de que quieres salir de <strong>{project.repo_name}</strong>?
+                Ya no podrás ver ni editar sus tarjetas ni hitos.
+              </p>
+            </div>
+            <div className="modal__footer">
+              <button type="button" className="btn btn--ghost" onClick={() => setShowLeaveConfirm(false)}>Cancelar</button>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                style={{ color: '#F59E0B', borderColor: 'rgba(245, 158, 11, 0.35)' }}
+                onClick={handleLeaveProject}
+              >
+                Salir del proyecto
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
