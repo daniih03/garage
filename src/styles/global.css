@@ -1700,9 +1700,11 @@ a { color: inherit; text-decoration: none; }
 .member-avatar-link:first-child {
   margin-left: 0;
 }
-.member-avatar-link:hover {
-  transform: translateY(-2px) scale(1.1);
-  z-index: 20;
+@media (hover: hover) and (pointer: fine) {
+  .member-avatar-link:hover {
+    transform: translateY(-2px) scale(1.1);
+    z-index: 20;
+  }
 }
 
 .member-avatar,
@@ -2186,27 +2188,69 @@ a { color: inherit; text-decoration: none; }
 
   /* Members bar on mobile */
   .members-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
     gap: 8px;
+    width: 100%;
   }
+
   .members-bar__left {
-    gap: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    width: 100%;
   }
+
+  .member-avatar-link,
+  .member-avatar-link:hover,
+  .member-avatar-link:focus,
+  .member-avatar-link:focus-visible,
+  .member-avatar-link:active {
+    transform: none !important;
+    z-index: auto !important;
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    box-shadow: none !important;
+  }
+
   .member-avatar,
-  .member-avatar--placeholder {
-    width: 26px;
-    height: 26px;
-    margin-left: -6px;
-  }
-  .members-bar__count {
-    font-size: 11px;
-  }
-  .members-bar__actions {
-    gap: 6px;
-  }
-  .members-bar__actions .btn {
-    padding: 4px 8px;
-    font-size: 11px;
+  .member-avatar--placeholder,
+  .member-avatar:hover,
+  .member-avatar:focus,
+  .member-avatar:active {
+    width: 28px;
     height: 28px;
+    margin-left: -6px;
+    transform: none !important;
+    outline: none !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+  }
+
+  .members-bar__count {
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+
+  .members-bar__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .members-bar__actions .btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 6px;
+    font-size: 11px;
+    height: 30px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    min-width: 0;
   }
 
   /* Milestone bar on mobile */
