@@ -1,3 +1,18 @@
+export function renderTextWithMentions(text) {
+  if (!text) return null
+  const parts = String(text).split(/(@[A-Z0-9]+-\d{2}-\d{3})/g)
+  return parts.map((part, i) => {
+    if (/^@[A-Z0-9]+-\d{2}-\d{3}$/.test(part)) {
+      return (
+        <span key={i} className="card-mention-badge">
+          {part}
+        </span>
+      )
+    }
+    return part
+  })
+}
+
 export default function Card({
   card,
   isDragging,
@@ -50,9 +65,9 @@ export default function Card({
 
       {/* Title + description */}
       <div className="card__body">
-        <h3 className="card__title">{card.title}</h3>
+        <h3 className="card__title">{renderTextWithMentions(card.title)}</h3>
         {card.description && (
-          <p className="card__description">{card.description}</p>
+          <p className="card__description">{renderTextWithMentions(card.description)}</p>
         )}
       </div>
 

@@ -46,8 +46,9 @@ function compareCardsByPriority(a, b) {
   return (a.position ?? 0) - (b.position ?? 0)
 }
 
-export default function Board({ project, milestone }) {
+export default function Board({ project, milestone, refreshKey }) {
   const [cards,           setCards]           = useState([])
+  const [allProjectCards, setAllProjectCards] = useState([])
   const [loading,         setLoading]         = useState(true)
   const [modal,           setModal]           = useState({ open: false, card: null, defaultStatus: 'todo' })
   const [draggingId,      setDraggingId]      = useState(null)
@@ -64,6 +65,7 @@ export default function Board({ project, milestone }) {
   /* ── Fetch + Realtime ── */
   useEffect(() => {
     fetchCards()
+    fetchAllProjectCards()
 
     const channel = supabase
       .channel(`board-${project.id}-${milestone.id}`)
@@ -74,7 +76,16 @@ export default function Board({ project, milestone }) {
       .subscribe()
 
     return () => supabase.removeChannel(channel)
-  }, [project.id, milestone.id])
+  }, [project.id, milestone.id, refreshKey])
+
+  async function fetchAllProjectCards() {
+    const { data } = await supabase
+      .from('cards')
+      .select('*')
+      .eq('project_id', project.id)
+      .order('card_number', { ascending: true })
+    if (data) setAllProjectCards(data)
+  }
 
   async function fetchCards() {
     setLoading(true)
@@ -349,6 +360,7 @@ export default function Board({ project, milestone }) {
           cardsInStatus={cards.filter(c =>
             c.status === (modal.card?.status ?? modal.defaultStatus)
           )}
+          allCards={allProjectCards}
           onDeleteCard={handleDelete}
           onClose={() => setModal({ open: false, card: null, defaultStatus: 'todo' })}
         />

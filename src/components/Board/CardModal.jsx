@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import ConfirmModal from '../Common/ConfirmModal'
+import { renderTextWithMentions } from './Card'
 
 const STATUSES = [
   { id: 'todo',    label: 'To do',   color: '#71717A' },
@@ -35,12 +36,12 @@ export default function CardModal({
   project,
   milestone,
   cardsInStatus,
+  allCards = [],
   onDeleteCard,
   onClose,
 }) {
   const isEditing = Boolean(card)
 
-  // Map legacy inprogress to doing
   const initialStatus = (card?.status === 'inprogress' ? 'doing' : card?.status)
     ?? (defaultStatus === 'inprogress' ? 'doing' : defaultStatus)
 
@@ -57,6 +58,19 @@ export default function CardModal({
   const [error,  setError]  = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
+  /* ── Mention autocomplete state ── */
+  const [mentionMenu, setMentionMenu] = useState({
+    open: false,
+    field: null, // 'title' | 'description'
+    query: '',
+    cursorPos: 0,
+    selectedIndex: 0,
+  })
+
+  /* ── Comparison panel state ── */
+  const [showComparison,    setShowComparison]    = useState(true)
+  const [activeRefCardId,   setActiveRefCardId]   = useState(null)
+
   /* ── Comments state ── */
   const [comments,     setComments]     = useState([])
   const [newComment,   setNewComment]   = useState('')
@@ -64,17 +78,65 @@ export default function CardModal({
   const [currentUser,  setCurrentUser]  = useState(null)
 
   const titleRef = useRef(null)
+  const descRef  = useRef(null)
+
+  /* ── Parse referenced cards from title & description ── */
+  const referencedCards = useMemo(() => {
+    const text = `${form.title} ${form.description}`
+    const matches = Array.from(text.matchAll(/@([A-Z0-9]+-\d{2}-\d{3})/g)).map(m => m[1])
+    const uniqueIds = Array.from(new Set(matches))
+    return uniqueIds
+      .map(id => allCards.find(c => c.display_id === id))
+      .filter(Boolean)
+      .filter(c => c.id !== card?.id)
+  }, [form.title, form.description, allCards, card?.id])
+
+  // Sync activeRefCardId when referencedCards change
+  useEffect(() => {
+    if (referencedCards.length > 0) {
+      if (!activeRefCardId || !referencedCards.some(c => c.id === activeRefCardId)) {
+        setActiveRefCardId(referencedCards[0].id)
+      }
+    } else {
+      setActiveRefCardId(null)
+    }
+  }, [referencedCards, activeRefCardId])
+
+  const activeComparisonCard = referencedCards.find(c => c.id === activeRefCardId) || referencedCards[0]
+
+  /* ── Filter candidates for @ mention autocomplete ── */
+  const mentionCandidates = useMemo(() => {
+    if (!mentionMenu.open) return []
+    const q = mentionMenu.query.toLowerCase()
+    return allCards
+      .filter(c => c.id !== card?.id)
+      .filter(c => {
+        if (!q) return true
+        return (
+          c.display_id?.toLowerCase().includes(q) ||
+          c.title?.toLowerCase().includes(q)
+        )
+      })
+      .slice(0, 6)
+  }, [mentionMenu.open, mentionMenu.query, allCards, card?.id])
 
   /* ── Mount effects ── */
   useEffect(() => {
     titleRef.current?.focus()
-
     supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user))
 
-    const onKey = e => e.key === 'Escape' && onClose()
+    const onKey = e => {
+      if (e.key === 'Escape') {
+        if (mentionMenu.open) {
+          setMentionMenu(prev => ({ ...prev, open: false }))
+        } else {
+          onClose()
+        }
+      }
+    }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, mentionMenu.open])
 
   /* ── Comments: Fetch + Realtime ── */
   useEffect(() => {
@@ -133,10 +195,71 @@ export default function CardModal({
     await supabase.from('card_comments').delete().eq('id', commentId)
   }
 
-  /* ── Form handlers ── */
-  function handleChange(e) {
-    const { name, value } = e.target
+  /* ── Form & Mention Handlers ── */
+  function handleInputChange(e) {
+    const { name, value, selectionStart } = e.target
     setForm(prev => ({ ...prev, [name]: value }))
+
+    // Detect @ trigger
+    const textBeforeCursor = value.slice(0, selectionStart ?? value.length)
+    const match = textBeforeCursor.match(/@([a-zA-Z0-9_-]*)$/)
+
+    if (match) {
+      setMentionMenu({
+        open: true,
+        field: name,
+        query: match[1],
+        cursorPos: selectionStart ?? value.length,
+        selectedIndex: 0,
+      })
+    } else {
+      if (mentionMenu.open) {
+        setMentionMenu(prev => ({ ...prev, open: false }))
+      }
+    }
+  }
+
+  function handleInputKeyDown(e) {
+    if (!mentionMenu.open || mentionCandidates.length === 0) return
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setMentionMenu(prev => ({
+        ...prev,
+        selectedIndex: (prev.selectedIndex + 1) % mentionCandidates.length,
+      }))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setMentionMenu(prev => ({
+        ...prev,
+        selectedIndex: (prev.selectedIndex - 1 + mentionCandidates.length) % mentionCandidates.length,
+      }))
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault()
+      const selected = mentionCandidates[mentionMenu.selectedIndex]
+      if (selected) selectMention(selected)
+    }
+  }
+
+  function selectMention(targetCard) {
+    const field = mentionMenu.field
+    const currentVal = form[field]
+    const textBefore = currentVal.slice(0, mentionMenu.cursorPos)
+    const textAfter  = currentVal.slice(mentionMenu.cursorPos)
+
+    const updatedBefore = textBefore.replace(/@([a-zA-Z0-9_-]*)$/, `@${targetCard.display_id} `)
+    const newText = updatedBefore + textAfter
+
+    setForm(prev => ({ ...prev, [field]: newText }))
+    setMentionMenu({ open: false, field: null, query: '', cursorPos: 0, selectedIndex: 0 })
+    setShowComparison(true)
+
+    // Re-focus input
+    if (field === 'title') {
+      titleRef.current?.focus()
+    } else {
+      descRef.current?.focus()
+    }
   }
 
   function togglePill(field, value) {
@@ -180,12 +303,14 @@ export default function CardModal({
       updated_at:     new Date().toISOString(),
     }
 
-    let dbError
+    let dbError = null
 
     if (isEditing) {
-      ;({ error: dbError } = await supabase.from('cards').update(payload).eq('id', card.id))
+      ;({ error: dbError } = await supabase
+        .from('cards')
+        .update(payload)
+        .eq('id', card.id))
     } else {
-      /* Auto-generate card_number and display_id */
       const { data: maxData } = await supabase
         .from('cards')
         .select('card_number')
@@ -218,7 +343,6 @@ export default function CardModal({
     else onClose()
   }
 
-  /* ── Formatting ── */
   function formatDate(iso) {
     return new Intl.DateTimeFormat('es', {
       day: '2-digit', month: 'short',
@@ -226,257 +350,412 @@ export default function CardModal({
     }).format(new Date(iso))
   }
 
+  const hasParallelView = Boolean(activeComparisonCard && showComparison)
+
   return createPortal(
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div
-        className="modal modal--lg"
+        className={`modal ${hasParallelView ? 'modal--parallel' : 'modal--lg'}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="card-modal-title"
       >
-        <form className="modal__form-wrapper" onSubmit={handleSubmit} noValidate>
-          {/* ── 1. Fixed Header ── */}
-          <div className="modal__header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              {isEditing && (
-                <span className="display-id-badge" aria-label={`ID: ${card.display_id}`}>
-                  {card.display_id}
+        {/* ── COLUMN 1: Form Column ── */}
+        <div className="card-modal__form-col">
+          <form className="modal__form-wrapper" onSubmit={handleSubmit} noValidate>
+            {/* 1. Header */}
+            <div className="modal__header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {isEditing && (
+                  <span className="display-id-badge" aria-label={`ID: ${card.display_id}`}>
+                    {card.display_id}
+                  </span>
+                )}
+                <h2 className="modal__title" id="card-modal-title">
+                  {isEditing ? 'Editar tarjeta' : 'Nueva tarjeta'}
+                </h2>
+              </div>
+              <button type="button" className="modal__close" onClick={onClose} aria-label="Cerrar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Banner when references exist but comparison is minimized */}
+            {referencedCards.length > 0 && !showComparison && (
+              <div className="card-ref-minimized-banner">
+                <span>
+                  Vinculada con <strong>@{referencedCards[0].display_id}</strong>
+                  {referencedCards.length > 1 && ` y ${referencedCards.length - 1} más`}
                 </span>
-              )}
-              <h2 className="modal__title" id="card-modal-title">
-                {isEditing ? 'Editar tarjeta' : 'Nueva tarjeta'}
-              </h2>
-            </div>
-            <button type="button" className="modal__close" onClick={onClose} aria-label="Cerrar">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
-
-          {/* ── 2. Scrollable Middle Content ── */}
-          <div className="card-modal__content">
-            {error && <p className="form-error" role="alert">{error}</p>}
-
-            {/* Title */}
-            <div className="form-group">
-              <label className="form-label" htmlFor="c-title">
-                Título <span className="required" aria-hidden="true">*</span>
-              </label>
-              <input
-                ref={titleRef}
-                id="c-title"
-                name="title"
-                type="text"
-                className="form-input"
-                value={form.title}
-                onChange={handleChange}
-                placeholder="Resumen claro de la tarea…"
-                required
-              />
-            </div>
-
-            {/* Description */}
-            <div className="form-group">
-              <label className="form-label" htmlFor="c-desc">Descripción</label>
-              <textarea
-                id="c-desc"
-                name="description"
-                className="form-textarea"
-                value={form.description}
-                onChange={handleChange}
-                placeholder="Detalles, objetivos, contexto…"
-                rows={2}
-              />
-            </div>
-
-            {/* Primary (HW / SW) + Secondary side by side */}
-            <div className="form-row">
-              <div className="form-group">
-                <span className="form-label" id="primary-label">
-                  Primario (HW / SW) <span className="required" aria-hidden="true">*</span>
-                </span>
-                <div className="pill-group" role="group" aria-labelledby="primary-label">
-                  {PRIMARY_TYPES.map(t => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      title={t.title}
-                      className={`pill pill--primary-${t.id.toLowerCase()}${form.primary_type === t.id
-                        ? ' pill--active'
-                        : ''}`}
-                      onClick={() => togglePill('primary_type', t.id)}
-                      aria-pressed={form.primary_type === t.id}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--xs"
+                  onClick={() => setShowComparison(true)}
+                >
+                  Comparar en paralelo ↔
+                </button>
               </div>
+            )}
 
-              <div className="form-group">
-                <span className="form-label" id="secondary-label">
-                  Secundario <span className="required" aria-hidden="true">*</span>
-                </span>
-                <div className="pill-group" role="group" aria-labelledby="secondary-label">
-                  {SECONDARY_TYPES.map(t => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className={`pill pill--secondary-${t.id}${form.secondary_type === t.id ? ' pill--active' : ''}`}
-                      onClick={() => togglePill('secondary_type', t.id)}
-                      aria-pressed={form.secondary_type === t.id}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+            {/* 2. Scrollable Middle Content */}
+            <div className="card-modal__content">
+              {error && <p className="form-error" role="alert">{error}</p>}
 
-            {/* Priority */}
-            <div className="form-group">
-              <span className="form-label" id="priority-label">
-                Prioridad <span className="required" aria-hidden="true">*</span>
-              </span>
-              <div className="pill-group" role="group" aria-labelledby="priority-label">
-                {PRIORITIES.map(p => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className={`pill pill--priority-${p.id}${form.priority === p.id ? ' pill--active' : ''}`}
-                    style={form.priority === p.id ? { '--pill-active-color': p.color } : {}}
-                    onClick={() => togglePill('priority', p.id)}
-                    aria-pressed={form.priority === p.id}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+              {/* Title with @ mention support */}
+              <div className="form-group" style={{ position: 'relative' }}>
+                <label className="form-label" htmlFor="c-title">
+                  Título <span className="required" aria-hidden="true">*</span>
+                  <span className="form-label__hint">Usa @ para vincular tarjetas</span>
+                </label>
+                <input
+                  ref={titleRef}
+                  id="c-title"
+                  name="title"
+                  type="text"
+                  className="form-input"
+                  value={form.title}
+                  onChange={handleInputChange}
+                  onKeyDown={handleInputKeyDown}
+                  placeholder="Resumen claro de la tarea (usa @ para vincular)…"
+                  required
+                />
 
-            {/* Status (To do, Doing, Blocked, Done) */}
-            <div className="form-group">
-              <span className="form-label" id="status-label">Estado</span>
-              <div className="status-selector" role="radiogroup" aria-labelledby="status-label">
-                {STATUSES.map(s => (
-                  <label
-                    key={s.id}
-                    className={`status-option${form.status === s.id ? ' status-option--active' : ''}`}
-                    style={form.status === s.id ? { borderColor: s.color, color: s.color } : {}}
-                  >
-                    <input
-                      type="radio"
-                      name="status"
-                      value={s.id}
-                      checked={form.status === s.id}
-                      onChange={handleChange}
-                      style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
-                      aria-label={s.label}
-                    />
-                    {s.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Comments (edit mode only) */}
-            {isEditing && (
-              <div className="comments-section">
-                <h3 className="comments-section__title">
-                  Comentarios
-                  {comments.length > 0 && (
-                    <span className="comments-count">{comments.length}</span>
-                  )}
-                </h3>
-
-                {comments.length === 0 ? (
-                  <p className="comments-empty">Sin comentarios todavía.</p>
-                ) : (
-                  <div className="comments-list">
-                    {comments.map(c => (
-                      <div key={c.id} className="comment">
-                        <div className="comment__header">
-                          <span className="comment__author">
-                            {c.created_by === currentUser?.id ? 'Tú' : 'Colaborador'}
-                          </span>
-                          <span className="comment__date">{formatDate(c.created_at)}</span>
-                          {c.created_by === currentUser?.id && (
-                            <button
-                              type="button"
-                              className="comment__delete"
-                              onClick={() => handleDeleteComment(c.id)}
-                              aria-label="Eliminar comentario"
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                        <p className="comment__content">{c.content}</p>
-                      </div>
+                {/* Mention Dropdown for Title */}
+                {mentionMenu.open && mentionMenu.field === 'title' && mentionCandidates.length > 0 && (
+                  <div className="mention-dropdown">
+                    <div className="mention-dropdown__header">Vincular tarjeta:</div>
+                    {mentionCandidates.map((c, idx) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={`mention-item${idx === mentionMenu.selectedIndex ? ' mention-item--selected' : ''}`}
+                        onClick={() => selectMention(c)}
+                      >
+                        <span className="mention-item__id">{c.display_id}</span>
+                        <span className="mention-item__title">{c.title}</span>
+                      </button>
                     ))}
                   </div>
                 )}
-
-                {/* New comment input */}
-                <div className="comment-input-group">
-                  <textarea
-                    className="form-textarea"
-                    value={newComment}
-                    onChange={e => setNewComment(e.target.value)}
-                    placeholder="Añade un comentario…"
-                    rows={2}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleAddComment()
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn--primary btn--sm"
-                    onClick={handleAddComment}
-                    disabled={!newComment.trim() || addingComment}
-                  >
-                    {addingComment ? '…' : 'Comentar'}
-                  </button>
-                </div>
-                <p className="comment-hint">Ctrl+Enter para enviar</p>
               </div>
-            )}
-          </div>
 
-          {/* ── 3. Fixed Footer at Bottom ── */}
-          <div className="modal__footer">
-            {isEditing && (
+              {/* Description with @ mention support */}
+              <div className="form-group" style={{ position: 'relative' }}>
+                <label className="form-label" htmlFor="c-desc">
+                  Descripción
+                  <span className="form-label__hint">Usa @ para vincular tarjetas</span>
+                </label>
+                <textarea
+                  ref={descRef}
+                  id="c-desc"
+                  name="description"
+                  className="form-textarea"
+                  value={form.description}
+                  onChange={handleInputChange}
+                  onKeyDown={handleInputKeyDown}
+                  placeholder="Detalles, contexto, objetivos… (escribe @ para comparar en paralelo)"
+                  rows={3}
+                />
+
+                {/* Mention Dropdown for Description */}
+                {mentionMenu.open && mentionMenu.field === 'description' && mentionCandidates.length > 0 && (
+                  <div className="mention-dropdown">
+                    <div className="mention-dropdown__header">Vincular tarjeta:</div>
+                    {mentionCandidates.map((c, idx) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={`mention-item${idx === mentionMenu.selectedIndex ? ' mention-item--selected' : ''}`}
+                        onClick={() => selectMention(c)}
+                      >
+                        <span className="mention-item__id">{c.display_id}</span>
+                        <span className="mention-item__title">{c.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Primary (HW / SW) + Secondary side by side */}
+              <div className="form-row">
+                <div className="form-group">
+                  <span className="form-label" id="primary-label">
+                    Primario (HW / SW) <span className="required" aria-hidden="true">*</span>
+                  </span>
+                  <div className="pill-group" role="group" aria-labelledby="primary-label">
+                    {PRIMARY_TYPES.map(t => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        title={t.title}
+                        className={`pill pill--primary-${t.id.toLowerCase()}${form.primary_type === t.id
+                          ? ' pill--active'
+                          : ''}`}
+                        onClick={() => togglePill('primary_type', t.id)}
+                        aria-pressed={form.primary_type === t.id}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <span className="form-label" id="secondary-label">
+                    Secundario <span className="required" aria-hidden="true">*</span>
+                  </span>
+                  <div className="pill-group" role="group" aria-labelledby="secondary-label">
+                    {SECONDARY_TYPES.map(t => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className={`pill pill--secondary-${t.id}${form.secondary_type === t.id ? ' pill--active' : ''}`}
+                        onClick={() => togglePill('secondary_type', t.id)}
+                        aria-pressed={form.secondary_type === t.id}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Priority */}
+              <div className="form-group">
+                <span className="form-label" id="priority-label">
+                  Prioridad <span className="required" aria-hidden="true">*</span>
+                </span>
+                <div className="pill-group" role="group" aria-labelledby="priority-label">
+                  {PRIORITIES.map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className={`pill pill--priority-${p.id}${form.priority === p.id ? ' pill--active' : ''}`}
+                      style={form.priority === p.id ? { '--pill-active-color': p.color } : {}}
+                      onClick={() => togglePill('priority', p.id)}
+                      aria-pressed={form.priority === p.id}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="form-group">
+                <span className="form-label" id="status-label">Estado</span>
+                <div className="status-selector" role="radiogroup" aria-labelledby="status-label">
+                  {STATUSES.map(s => (
+                    <label
+                      key={s.id}
+                      className={`status-option${form.status === s.id ? ' status-option--active' : ''}`}
+                      style={form.status === s.id ? { borderColor: s.color, color: s.color } : {}}
+                    >
+                      <input
+                        type="radio"
+                        name="status"
+                        value={s.id}
+                        checked={form.status === s.id}
+                        onChange={handleInputChange}
+                        style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
+                        aria-label={s.label}
+                      />
+                      {s.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Comments (edit mode only) */}
+              {isEditing && (
+                <div className="comments-section">
+                  <h3 className="comments-section__title">
+                    Comentarios
+                    {comments.length > 0 && (
+                      <span className="comments-count">{comments.length}</span>
+                    )}
+                  </h3>
+
+                  {comments.length === 0 ? (
+                    <p className="comments-empty">Sin comentarios todavía.</p>
+                  ) : (
+                    <div className="comments-list">
+                      {comments.map(c => (
+                        <div key={c.id} className="comment">
+                          <div className="comment__header">
+                            <span className="comment__author">
+                              {c.created_by === currentUser?.id ? 'Tú' : 'Colaborador'}
+                            </span>
+                            <span className="comment__date">{formatDate(c.created_at)}</span>
+                            {c.created_by === currentUser?.id && (
+                              <button
+                                type="button"
+                                className="comment__delete"
+                                onClick={() => handleDeleteComment(c.id)}
+                                aria-label="Eliminar comentario"
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                                  <line x1="18" y1="6" x2="6" y2="18" />
+                                  <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                          <p className="comment__content">{c.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="comment-input-group">
+                    <textarea
+                      className="form-textarea"
+                      value={newComment}
+                      onChange={e => setNewComment(e.target.value)}
+                      placeholder="Añade un comentario…"
+                      rows={2}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleAddComment()
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn--primary btn--sm"
+                      onClick={handleAddComment}
+                      disabled={!newComment.trim() || addingComment}
+                    >
+                      {addingComment ? '…' : 'Comentar'}
+                    </button>
+                  </div>
+                  <p className="comment-hint">Ctrl+Enter para enviar</p>
+                </div>
+              )}
+            </div>
+
+            {/* 3. Fixed Footer */}
+            <div className="modal__footer">
+              {isEditing && (
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  style={{
+                    color: 'var(--danger)',
+                    borderColor: 'rgba(231,76,60,0.3)',
+                    marginRight: 'auto',
+                  }}
+                  onClick={() => setShowDeleteConfirm(true)}
+                  aria-label="Eliminar tarjeta"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginRight: 4 }}>
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    <path d="M10 11v6M14 11v6" />
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                  </svg>
+                  Eliminar tarjeta
+                </button>
+              )}
+              <button type="button" className="btn btn--ghost" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn--primary" disabled={saving}>
+                {saving ? 'Guardando…' : isEditing ? 'Actualizar' : 'Crear tarjeta'}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* ── COLUMN 2: Parallel Comparison Column (Active when @mention is present) ── */}
+        {hasParallelView && (
+          <div className="card-comparison-col">
+            {/* Header with tabs and collapse button */}
+            <div className="card-comparison-header">
+              <div className="card-comparison-header__info">
+                <span className="card-comparison-header__title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginRight: 6 }}>
+                    <path d="M16 3h5v5" />
+                    <path d="M8 21H3v-5" />
+                    <path d="M21 3l-7 7" />
+                    <path d="M3 21l7-7" />
+                  </svg>
+                  Comparando tarjeta vinculada
+                </span>
+                {referencedCards.length > 1 && (
+                  <div className="card-comparison-tabs">
+                    {referencedCards.map(rc => (
+                      <button
+                        key={rc.id}
+                        type="button"
+                        className={`card-comparison-tab${rc.id === activeComparisonCard.id ? ' card-comparison-tab--active' : ''}`}
+                        onClick={() => setActiveRefCardId(rc.id)}
+                      >
+                        {rc.display_id}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <button
                 type="button"
-                className="btn btn--ghost btn--sm"
-                style={{
-                  color: 'var(--danger)',
-                  borderColor: 'rgba(231,76,60,0.3)',
-                  marginRight: 'auto',
-                }}
-                onClick={() => setShowDeleteConfirm(true)}
-                aria-label="Eliminar tarjeta"
+                className="btn btn--ghost btn--xs"
+                onClick={() => setShowComparison(false)}
+                title="Ocultar vista paralela"
+                aria-label="Ocultar comparativa"
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginRight: 4 }}>
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                  <path d="M10 11v6M14 11v6" />
-                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                </svg>
-                Eliminar tarjeta
+                Ocultar
               </button>
-            )}
-            <button type="button" className="btn btn--ghost" onClick={onClose}>Cancelar</button>
-            <button type="submit" className="btn btn--primary" disabled={saving}>
-              {saving ? 'Guardando…' : isEditing ? 'Actualizar' : 'Crear tarjeta'}
-            </button>
+            </div>
+
+            {/* Comparison card body */}
+            <div className="card-comparison-body">
+              <div className="comparison-card-meta">
+                <span className="card__display-id">{activeComparisonCard.display_id}</span>
+                <span className={`status-badge status-badge--${activeComparisonCard.status}`}>
+                  {STATUSES.find(s => s.id === activeComparisonCard.status)?.label ?? activeComparisonCard.status}
+                </span>
+
+                <div className="card__badges" style={{ marginLeft: 'auto' }}>
+                  {activeComparisonCard.primary_type && (
+                    <span className={`badge-primary badge-primary--${activeComparisonCard.primary_type.toLowerCase()}`}>
+                      {activeComparisonCard.primary_type}
+                    </span>
+                  )}
+                  {activeComparisonCard.secondary_type && (
+                    <span className={`badge-secondary badge-secondary--${activeComparisonCard.secondary_type}`}>
+                      {activeComparisonCard.secondary_type}
+                    </span>
+                  )}
+                  {activeComparisonCard.priority && (
+                    <span className={`badge-priority badge-priority--${activeComparisonCard.priority}`}>
+                      {activeComparisonCard.priority}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="comparison-card-content">
+                <h4 className="comparison-card-title">
+                  {renderTextWithMentions(activeComparisonCard.title)}
+                </h4>
+
+                <div className="comparison-card-desc-box">
+                  <span className="comparison-card-desc-label">Descripción:</span>
+                  {activeComparisonCard.description ? (
+                    <p className="comparison-card-desc">
+                      {renderTextWithMentions(activeComparisonCard.description)}
+                    </p>
+                  ) : (
+                    <p className="comparison-card-desc comparison-card-desc--empty">
+                      Esta tarjeta no tiene descripción detallada.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-        </form>
+        )}
       </div>
 
       {showDeleteConfirm && (

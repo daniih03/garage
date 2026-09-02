@@ -17,9 +17,22 @@ export default function ProjectView({
   const [milestones,         setMilestones]         = useState([])
   const [members,            setMembers]            = useState([])
   const [loading,            setLoading]            = useState(true)
+  const [refreshing,         setRefreshing]         = useState(false)
+  const [refreshKey,         setRefreshKey]         = useState(0)
   const [showInvite,         setShowInvite]         = useState(false)
   const [showEditProject,    setShowEditProject]    = useState(false)
   const [showDeleteProject,  setShowDeleteProject]  = useState(false)
+
+  async function handleRefresh() {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await fetchAll()
+      setRefreshKey(prev => prev + 1)
+    } finally {
+      setTimeout(() => setRefreshing(false), 500)
+    }
+  }
 
   useEffect(() => {
     fetchAll()
@@ -290,6 +303,31 @@ export default function ProjectView({
         <div className="members-bar__actions">
           <button
             className="btn btn--ghost btn--sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            aria-label="Refrescar proyecto"
+            title="Refrescar proyecto, hitos y tarjetas"
+          >
+            <svg
+              className={refreshing ? 'spin-animation' : ''}
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+            {refreshing ? 'Refrescando...' : 'Refrescar'}
+          </button>
+          <button
+            className="btn btn--ghost btn--sm"
             onClick={() => setShowInvite(true)}
             aria-label="Invitar colaborador"
           >
@@ -346,7 +384,7 @@ export default function ProjectView({
           </p>
         </div>
       ) : activeMilestone ? (
-        <Board project={project} milestone={activeMilestone} />
+        <Board project={project} milestone={activeMilestone} refreshKey={refreshKey} />
       ) : null}
 
       {showInvite && (
