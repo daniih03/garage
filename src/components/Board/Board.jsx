@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import Column from './Column'
 import CardModal from './CardModal'
 import ConfirmModal from '../Common/ConfirmModal'
+import FilterPopover from './FilterPopover'
 
 const COLUMNS = [
   { id: 'todo',    label: 'To do',   color: '#71717A' },
@@ -18,13 +19,35 @@ const PRIORITY_ORDER = {
   low:      1,
 }
 
+const PRIMARY_OPTIONS = [
+  { id: 'all', label: 'Todos los primarios', shortLabel: 'Todos' },
+  { id: 'HW',  label: 'Hardware (HW)',      shortLabel: 'HW',    color: '#F59E0B' },
+  { id: 'SW',  label: 'Software (SW)',      shortLabel: 'SW',    color: '#0284C7' },
+]
+
+const SECONDARY_OPTIONS = [
+  { id: 'all',   label: 'Todos los secundarios', shortLabel: 'Todos' },
+  { id: 'task',  label: 'Task',                  shortLabel: 'Task',  color: '#38BDF8' },
+  { id: 'bug',   label: 'Bug',                   shortLabel: 'Bug',   color: '#EF4444' },
+  { id: 'spike', label: 'Spike',                 shortLabel: 'Spike', color: '#A855F7' },
+  { id: 'stock', label: 'Stock',                 shortLabel: 'Stock', color: '#10B981' },
+]
+
+const PRIORITY_OPTIONS = [
+  { id: 'all',      label: 'Todas las prioridades', shortLabel: 'Todas' },
+  { id: 'critical', label: 'Critical',              shortLabel: 'Critical', color: '#DC2626' },
+  { id: 'high',     label: 'High',                  shortLabel: 'High',     color: '#F97316' },
+  { id: 'mid',      label: 'Mid',                   shortLabel: 'Mid',      color: '#0EA5E9' },
+  { id: 'low',      label: 'Low',                   shortLabel: 'Low',      color: '#94A3B8' },
+]
+
 function compareCardsByPriority(a, b) {
   const weightA = PRIORITY_ORDER[a.priority?.toLowerCase()] ?? 0
   const weightB = PRIORITY_ORDER[b.priority?.toLowerCase()] ?? 0
   if (weightB !== weightA) {
     return weightB - weightA // Higher priority first
   }
-  // Secondary sort by position or card_number
+  // Secondary sort by position
   return (a.position ?? 0) - (b.position ?? 0)
 }
 
@@ -106,6 +129,9 @@ export default function Board({ project, milestone }) {
 
   /* ── Filtering + Auto Priority Sorting ── */
   const hasActiveFilters = primaryFilter !== 'all' || secondaryFilter !== 'all' || priorityFilter !== 'all'
+  const activeCount = (primaryFilter !== 'all' ? 1 : 0) +
+                      (secondaryFilter !== 'all' ? 1 : 0) +
+                      (priorityFilter !== 'all' ? 1 : 0)
 
   function clearFilters() {
     setPrimaryFilter('all')
@@ -138,76 +164,67 @@ export default function Board({ project, milestone }) {
 
   return (
     <div className="board-wrapper">
-      {/* ── Filter Bar ── */}
-      <div className="board-filter-bar">
+      {/* ── Sleek Command Filter Bar ── */}
+      <div className={`board-filter-bar${hasActiveFilters ? ' has-filters-active' : ''}`}>
         <div className="board-filter-bar__group">
-          <span className="board-filter-bar__title">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-            </svg>
-            Filtros
-          </span>
+          {/* Filter Popover: Primario */}
+          <FilterPopover
+            label="Primario"
+            icon={(
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+                <rect x="9" y="9" width="6" height="6" />
+                <line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" />
+                <line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" />
+                <line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="15" x2="23" y2="15" />
+                <line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="15" x2="4" y2="15" />
+              </svg>
+            )}
+            value={primaryFilter}
+            options={PRIMARY_OPTIONS}
+            onChange={setPrimaryFilter}
+          />
 
-          {/* Primary filter */}
-          <div className="filter-item">
-            <label className="filter-item__label" htmlFor="filter-primary">Primario:</label>
-            <select
-              id="filter-primary"
-              className={`filter-item__select${primaryFilter !== 'all' ? ' filter-item__select--active' : ''}`}
-              value={primaryFilter}
-              onChange={e => setPrimaryFilter(e.target.value)}
-            >
-              <option value="all">Todos</option>
-              <option value="HW">HW (Hardware)</option>
-              <option value="SW">SW (Software)</option>
-            </select>
-          </div>
+          {/* Filter Popover: Secundario */}
+          <FilterPopover
+            label="Secundario"
+            icon={(
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                <line x1="7" y1="7" x2="7.01" y2="7" />
+              </svg>
+            )}
+            value={secondaryFilter}
+            options={SECONDARY_OPTIONS}
+            onChange={setSecondaryFilter}
+          />
 
-          {/* Secondary filter */}
-          <div className="filter-item">
-            <label className="filter-item__label" htmlFor="filter-secondary">Secundario:</label>
-            <select
-              id="filter-secondary"
-              className={`filter-item__select${secondaryFilter !== 'all' ? ' filter-item__select--active' : ''}`}
-              value={secondaryFilter}
-              onChange={e => setSecondaryFilter(e.target.value)}
-            >
-              <option value="all">Todos</option>
-              <option value="task">Task</option>
-              <option value="bug">Bug</option>
-              <option value="spike">Spike</option>
-              <option value="stock">Stock</option>
-            </select>
-          </div>
+          {/* Filter Popover: Prioridad */}
+          <FilterPopover
+            label="Prioridad"
+            icon={(
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                <line x1="4" y1="22" x2="4" y2="15" />
+              </svg>
+            )}
+            value={priorityFilter}
+            options={PRIORITY_OPTIONS}
+            onChange={setPriorityFilter}
+          />
 
-          {/* Priority filter */}
-          <div className="filter-item">
-            <label className="filter-item__label" htmlFor="filter-priority">Prioridad:</label>
-            <select
-              id="filter-priority"
-              className={`filter-item__select${priorityFilter !== 'all' ? ' filter-item__select--active' : ''}`}
-              value={priorityFilter}
-              onChange={e => setPriorityFilter(e.target.value)}
-            >
-              <option value="all">Todas</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="mid">Mid</option>
-              <option value="low">Low</option>
-            </select>
-          </div>
-
+          {/* Clear button if any filter is active */}
           {hasActiveFilters && (
             <button
               type="button"
-              className="btn btn--ghost btn--xs board-filter-bar__clear"
+              className="board-filter-clear-btn"
               onClick={clearFilters}
-              title="Restablecer filtros"
+              title="Restablecer todos los filtros"
             >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
-              Limpiar filtros
+              Limpiar ({activeCount})
             </button>
           )}
         </div>
@@ -215,11 +232,11 @@ export default function Board({ project, milestone }) {
         <div className="board-filter-bar__stats">
           {hasActiveFilters ? (
             <span className="filter-stats-badge">
-              Mostrando <strong>{filteredCards.length}</strong> de {cards.length} tarjetas
+              Mostrando <strong>{filteredCards.length}</strong> de {cards.length}
             </span>
           ) : (
             <span className="filter-stats-text">
-              {cards.length} {cards.length === 1 ? 'tarjeta' : 'tarjetas'} ordenadas por prioridad
+              {cards.length} {cards.length === 1 ? 'tarjeta' : 'tarjetas'}
             </span>
           )}
         </div>
