@@ -980,14 +980,15 @@ a { color: inherit; text-decoration: none; }
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.74);
+  background: rgba(0, 0, 0, 0.78);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 20px;
+  padding: 16px;
+  overflow-y: auto;
 }
 
 .modal {
@@ -1000,12 +1001,23 @@ a { color: inherit; text-decoration: none; }
   animation: modal-enter 0.18s var(--ease-out) both;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 40px);
+  max-height: calc(100vh - 32px);
   overflow: hidden;
+  margin: auto;
 }
 
 .modal--sm { max-width: 380px; }
 .modal--lg { max-width: 560px; }
+
+/* Wrapper inside form to anchor header & footer */
+.modal__form-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+}
 
 .modal__header {
   display: flex;
@@ -1027,24 +1039,30 @@ a { color: inherit; text-decoration: none; }
 }
 .modal__close:hover { color: var(--text-primary); background: var(--bg-input); }
 
-/* Scrollable area for modals */
+/* Scrollable middle content */
 .modal__scrollable,
-.card-modal__body {
+.card-modal__body,
+.card-modal__content {
   overflow-y: auto;
   overflow-x: hidden;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  padding: 18px 22px;
+  gap: 13px;
 }
 
+.card-modal__content::-webkit-scrollbar,
 .card-modal__body::-webkit-scrollbar {
   width: 6px;
 }
+.card-modal__content::-webkit-scrollbar-thumb,
 .card-modal__body::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 3px;
 }
+.card-modal__content::-webkit-scrollbar-thumb:hover,
 .card-modal__body::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
@@ -1061,9 +1079,9 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  padding-top: 12px;
+  padding: 12px 22px;
   border-top: 1px solid var(--border-subtle);
-  margin-top: 4px;
+  background: var(--bg-panel);
   flex-shrink: 0;
 }
 

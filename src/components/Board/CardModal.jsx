@@ -10,8 +10,8 @@ const STATUSES = [
 ]
 
 const PRIMARY_TYPES = [
-  { id: 'HW', label: 'HW (Hardware)', color: '#F59E0B' },
-  { id: 'SW', label: 'SW (Software)', color: '#0284C7' },
+  { id: 'HW', label: 'HW', title: 'Hardware', color: '#F59E0B' },
+  { id: 'SW', label: 'SW', title: 'Software', color: '#0284C7' },
 ]
 
 const SECONDARY_TYPES = [
@@ -215,28 +215,28 @@ export default function CardModal({
         aria-modal="true"
         aria-labelledby="card-modal-title"
       >
-        {/* Header */}
-        <div className="modal__header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {isEditing && (
-              <span className="display-id-badge" aria-label={`ID: ${card.display_id}`}>
-                {card.display_id}
-              </span>
-            )}
-            <h2 className="modal__title" id="card-modal-title">
-              {isEditing ? 'Editar tarjeta' : 'Nueva tarjeta'}
-            </h2>
+        <form className="modal__form-wrapper" onSubmit={handleSubmit} noValidate>
+          {/* ── 1. Fixed Header ── */}
+          <div className="modal__header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {isEditing && (
+                <span className="display-id-badge" aria-label={`ID: ${card.display_id}`}>
+                  {card.display_id}
+                </span>
+              )}
+              <h2 className="modal__title" id="card-modal-title">
+                {isEditing ? 'Editar tarjeta' : 'Nueva tarjeta'}
+              </h2>
+            </div>
+            <button type="button" className="modal__close" onClick={onClose} aria-label="Cerrar">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
           </div>
-          <button className="modal__close" onClick={onClose} aria-label="Cerrar">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
 
-        {/* Scrollable body */}
-        <div className="card-modal__body">
-          <form className="modal__form" onSubmit={handleSubmit} noValidate>
+          {/* ── 2. Scrollable Middle Content ── */}
+          <div className="card-modal__content">
             {error && <p className="form-error" role="alert">{error}</p>}
 
             {/* Title */}
@@ -271,7 +271,7 @@ export default function CardModal({
               />
             </div>
 
-            {/* Primary (HW / SW) + Secondary (task, bug, spike, stock) side by side */}
+            {/* Primary (HW / SW) + Secondary side by side */}
             <div className="form-row">
               <div className="form-group">
                 <span className="form-label" id="primary-label">Primario (HW / SW)</span>
@@ -280,8 +280,9 @@ export default function CardModal({
                     <button
                       key={t.id}
                       type="button"
+                      title={t.title}
                       className={`pill pill--primary-${t.id.toLowerCase()}${form.primary_type === t.id
-                        ? ` pill--active`
+                        ? ' pill--active'
                         : ''}`}
                       onClick={() => togglePill('primary_type', t.id)}
                       aria-pressed={form.primary_type === t.id}
@@ -354,102 +355,103 @@ export default function CardModal({
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="modal__footer">
-              {isEditing && (
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--sm"
-                  style={{
-                    color: 'var(--danger)',
-                    borderColor: 'rgba(231,76,60,0.3)',
-                    marginRight: 'auto',
-                  }}
-                  onClick={() => setShowDeleteConfirm(true)}
-                  aria-label="Eliminar tarjeta"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginRight: 4 }}>
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                    <path d="M10 11v6M14 11v6" />
-                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                  </svg>
-                  Eliminar tarjeta
-                </button>
-              )}
-              <button type="button" className="btn btn--ghost" onClick={onClose}>Cancelar</button>
-              <button type="submit" className="btn btn--primary" disabled={saving}>
-                {saving ? 'Guardando…' : isEditing ? 'Actualizar' : 'Crear tarjeta'}
-              </button>
-            </div>
-          </form>
+            {/* Comments (edit mode only) */}
+            {isEditing && (
+              <div className="comments-section">
+                <h3 className="comments-section__title">
+                  Comentarios
+                  {comments.length > 0 && (
+                    <span className="comments-count">{comments.length}</span>
+                  )}
+                </h3>
 
-          {/* ── Comments (edit mode only) ── */}
-          {isEditing && (
-            <div className="comments-section">
-              <h3 className="comments-section__title">
-                Comentarios
-                {comments.length > 0 && (
-                  <span className="comments-count">{comments.length}</span>
-                )}
-              </h3>
-
-              {comments.length === 0 ? (
-                <p className="comments-empty">Sin comentarios todavía.</p>
-              ) : (
-                <div className="comments-list">
-                  {comments.map(c => (
-                    <div key={c.id} className="comment">
-                      <div className="comment__header">
-                        <span className="comment__author">
-                          {c.created_by === currentUser?.id ? 'Tú' : 'Colaborador'}
-                        </span>
-                        <span className="comment__date">{formatDate(c.created_at)}</span>
-                        {c.created_by === currentUser?.id && (
-                          <button
-                            className="comment__delete"
-                            onClick={() => handleDeleteComment(c.id)}
-                            aria-label="Eliminar comentario"
-                          >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                              stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                              <line x1="18" y1="6" x2="6" y2="18" />
-                              <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                          </button>
-                        )}
+                {comments.length === 0 ? (
+                  <p className="comments-empty">Sin comentarios todavía.</p>
+                ) : (
+                  <div className="comments-list">
+                    {comments.map(c => (
+                      <div key={c.id} className="comment">
+                        <div className="comment__header">
+                          <span className="comment__author">
+                            {c.created_by === currentUser?.id ? 'Tú' : 'Colaborador'}
+                          </span>
+                          <span className="comment__date">{formatDate(c.created_at)}</span>
+                          {c.created_by === currentUser?.id && (
+                            <button
+                              type="button"
+                              className="comment__delete"
+                              onClick={() => handleDeleteComment(c.id)}
+                              aria-label="Eliminar comentario"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                        <p className="comment__content">{c.content}</p>
                       </div>
-                      <p className="comment__content">{c.content}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
 
-              {/* New comment input */}
-              <div className="comment-input-group">
-                <textarea
-                  className="form-textarea"
-                  value={newComment}
-                  onChange={e => setNewComment(e.target.value)}
-                  placeholder="Añade un comentario…"
-                  rows={2}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleAddComment()
-                  }}
-                />
-                <button
-                  type="button"
-                  className="btn btn--primary btn--sm"
-                  onClick={handleAddComment}
-                  disabled={!newComment.trim() || addingComment}
-                >
-                  {addingComment ? '…' : 'Comentar'}
-                </button>
+                {/* New comment input */}
+                <div className="comment-input-group">
+                  <textarea
+                    className="form-textarea"
+                    value={newComment}
+                    onChange={e => setNewComment(e.target.value)}
+                    placeholder="Añade un comentario…"
+                    rows={2}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleAddComment()
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn--primary btn--sm"
+                    onClick={handleAddComment}
+                    disabled={!newComment.trim() || addingComment}
+                  >
+                    {addingComment ? '…' : 'Comentar'}
+                  </button>
+                </div>
+                <p className="comment-hint">Ctrl+Enter para enviar</p>
               </div>
-              <p className="comment-hint">Ctrl+Enter para enviar</p>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+
+          {/* ── 3. Fixed Footer at Bottom ── */}
+          <div className="modal__footer">
+            {isEditing && (
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                style={{
+                  color: 'var(--danger)',
+                  borderColor: 'rgba(231,76,60,0.3)',
+                  marginRight: 'auto',
+                }}
+                onClick={() => setShowDeleteConfirm(true)}
+                aria-label="Eliminar tarjeta"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginRight: 4 }}>
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6M14 11v6" />
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                </svg>
+                Eliminar tarjeta
+              </button>
+            )}
+            <button type="button" className="btn btn--ghost" onClick={onClose}>Cancelar</button>
+            <button type="submit" className="btn btn--primary" disabled={saving}>
+              {saving ? 'Guardando…' : isEditing ? 'Actualizar' : 'Crear tarjeta'}
+            </button>
+          </div>
+        </form>
       </div>
 
       {showDeleteConfirm && (
