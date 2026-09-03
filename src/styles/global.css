@@ -1356,14 +1356,26 @@ a { color: inherit; text-decoration: none; }
   text-align: center;
 }
 
-.column__add-btn {
-  width: 28px; height: 28px;
-  display: flex; align-items: center; justify-content: center;
+.board-create-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
   border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  transition: color var(--transition), background-color var(--transition);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  transition: color var(--transition), background-color var(--transition), border-color var(--transition);
+  white-space: nowrap;
+  margin-left: 12px;
 }
-.column__add-btn:hover { color: var(--accent); background: var(--accent-subtle); }
+.board-create-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
 
 .column__cards {
   padding: 10px;

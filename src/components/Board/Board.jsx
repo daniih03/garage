@@ -416,6 +416,18 @@ export default function Board({ project, milestone, refreshKey }) {
               {cards.length} {cards.length === 1 ? 'tarjeta' : 'tarjetas'} ordenadas por prioridad
             </span>
           )}
+
+          <button
+            type="button"
+            className="board-create-btn"
+            onClick={() => handleOpenCard(null, 'todo')}
+            title="Nueva tarjeta"
+          >
+            <svg width="13" height="13" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+              <path d="M7.5 2v11M2 7.5h11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            Nueva tarjeta
+          </button>
         </div>
       </div>
 
@@ -453,7 +465,6 @@ export default function Board({ project, milestone, refreshKey }) {
               column={col}
               cards={colCards}
               draggingId={draggingId}
-              onAddCard={() => handleOpenCard(null, col.id)}
               onEditCard={card => handleOpenCard(card, card.status)}
               onDeleteCard={card => setCardToDelete(card)}
               onDrop={handleDrop}
