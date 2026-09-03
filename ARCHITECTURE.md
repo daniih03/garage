@@ -135,7 +135,7 @@ Creada automáticamente al hacer login via trigger `on_auth_user_created`.
 | `created_by` | uuid | FK → `auth.users.id` |
 | `created_at` | timestamptz | |
 
-**RLS:** Solo miembros en `project_members` pueden hacer cualquier operación.
+**RLS:** Permitido para miembros en `project_members` o si el usuario autenticado es el creador (`created_by = auth.uid()`).
 
 #### `project_members`
 | Columna | Tipo | Descripción |
@@ -554,6 +554,19 @@ BEGIN
   END IF;
 END;
 $$;
+
+-- 6. Asegurar que el creador de un proyecto siempre pueda verlo y gestionarlo
+DROP POLICY IF EXISTS "Solo miembros — projects" ON projects;
+CREATE POLICY "Solo miembros — projects" ON projects
+  FOR ALL USING (
+    created_by = auth.uid()
+    OR
+    EXISTS (
+      SELECT 1 FROM project_members pm
+      WHERE pm.project_id = projects.id AND pm.user_id = auth.uid()
+    )
+  )
+  WITH CHECK (auth.role() = 'authenticated');
 ```
 
 ---
@@ -595,7 +608,7 @@ $$;
 | 30 | Exportar e Importar proyecto completo en formato .csv con hitos y tarjetas | `b5a9fdd` |
 | 31 | Sistema de Rangos de Usuario (Owner, Admin, Member, Guest), Campana de Notificaciones interactiva y Gestión de Colaboradores | `28c4863` |
 | 32 | Fix persistencia de miembros expulsados, bloqueo de exportar CSV a Member/Guest y ordenación jerárquica de roles en modal | `5d2fca2` |
-| 33 | Corrección de creación de hitos, eliminación de auto-invitaciones de GitHub, centralización de invitaciones en campana de cabecera y restricción de papelera de proyecto solo a Owner | `c1afa6e` |
+| 33 | Corrección de creación de hitos, eliminación de auto-invitaciones de GitHub, centralización de invitaciones en campana de cabecera y restricción de papelera de proyecto solo a Owner | `3a4676c` |
 
 ---
 

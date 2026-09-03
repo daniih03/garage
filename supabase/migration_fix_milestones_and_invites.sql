@@ -86,3 +86,17 @@ BEGIN
   -- Ya no se auto-insertan registros en project_members
 END;
 $$;
+
+-- 6. Asegurar que el creador de un proyecto siempre pueda verlo y gestionarlo
+DROP POLICY IF EXISTS "Solo miembros — projects" ON projects;
+CREATE POLICY "Solo miembros — projects" ON projects
+  FOR ALL USING (
+    created_by = auth.uid()
+    OR
+    EXISTS (
+      SELECT 1 FROM project_members pm
+      WHERE pm.project_id = projects.id AND pm.user_id = auth.uid()
+    )
+  )
+  WITH CHECK (auth.role() = 'authenticated');
+
