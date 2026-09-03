@@ -455,7 +455,7 @@ CREATE POLICY "Salir o expulsar miembros" ON project_members
 | 28 | Campo Estado desmarcado por defecto en creación y obligatorio para guardar | `5bf733e` |
 | 29 | Fecha de creación en tarjeta y ordenación por antigüedad cuando coinciden tags | `287eeb1` |
 | 30 | Exportar e Importar proyecto completo en formato .csv con hitos y tarjetas | `b5a9fdd` |
-| 31 | Sistema de Rangos de Usuario (Owner, Admin, Member, Guest), Campana de Notificaciones interactiva y Gestión de Colaboradores | pendiente |
+| 31 | Sistema de Rangos de Usuario (Owner, Admin, Member, Guest), Campana de Notificaciones interactiva y Gestión de Colaboradores | `28c4863` |
 
 ---
 
