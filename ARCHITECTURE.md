@@ -389,7 +389,8 @@ CREATE POLICY "Salir o expulsar miembros" ON project_members
 | 26 | Migración RLS DELETE en project_members | `f7b7048` |
 | 27 | Botón genérico Nueva tarjeta en barra de filtros y eliminación de '+' en columnas | `84482c4` |
 | 28 | Campo Estado desmarcado por defecto en creación y obligatorio para guardar | `5bf733e` |
-| 29 | Fecha de creación en tarjeta y ordenación por antigüedad cuando coinciden tags | Pendiente |
+| 29 | Fecha de creación en tarjeta y ordenación por antigüedad cuando coinciden tags | `287eeb1` |
+| 30 | Exportar e Importar proyecto completo en formato .csv con hitos y tarjetas | Pendiente |
 
 ---
 

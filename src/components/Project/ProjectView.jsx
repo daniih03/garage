@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { fetchRepoCollaboratorsDetails, getStoredProviderToken } from '../../lib/github'
+import { generateProjectCSV, downloadCSV } from '../../lib/csvExportImport'
 import MilestoneBar from './MilestoneBar'
 import InviteModal from './InviteModal'
+import ImportProjectModal from './ImportProjectModal'
 import EditProjectModal from '../Home/EditProjectModal'
 import DangerConfirmModal from '../Common/DangerConfirmModal'
 import Board from '../Board/Board'
@@ -26,6 +28,8 @@ export default function ProjectView({
   const [memberToKick,       setMemberToKick]       = useState(null)
   const [showLeaveConfirm,   setShowLeaveConfirm]   = useState(false)
   const [kickError,          setKickError]          = useState('')
+  const [showImportModal,    setShowImportModal]    = useState(false)
+  const [exporting,          setExporting]          = useState(false)
 
   async function handleRefresh() {
     if (refreshing) return
@@ -35,6 +39,44 @@ export default function ProjectView({
       setRefreshKey(prev => prev + 1)
     } finally {
       setTimeout(() => setRefreshing(false), 500)
+    }
+  }
+
+  async function handleExportProject() {
+    if (exporting) return
+    setExporting(true)
+    try {
+      // 1. Obtener todos los hitos del proyecto
+      const { data: mData } = await supabase
+        .from('milestones')
+        .select('*')
+        .eq('project_id', project.id)
+        .order('number', { ascending: true })
+
+      // 2. Obtener todas las tarjetas del proyecto
+      const { data: cData } = await supabase
+        .from('cards')
+        .select('*')
+        .eq('project_id', project.id)
+        .order('card_number', { ascending: true })
+
+      // 3. Generar CSV y disparar descarga
+      const csvString = generateProjectCSV({
+        project,
+        milestones: mData || milestones,
+        cards: cData || [],
+      })
+
+      const safeName = (project.repo_name || 'proyecto').replace(/[^a-zA-Z0-9_-]/g, '_')
+      const dateStr = new Date().toISOString().slice(0, 10)
+      const filename = `${safeName}_${project.repo_acronym || 'GRG'}_${dateStr}.csv`
+
+      downloadCSV(filename, csvString)
+    } catch (err) {
+      console.error('Error exportando proyecto a CSV:', err)
+      alert('Error al exportar el proyecto: ' + (err.message || err))
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -409,6 +451,37 @@ export default function ProjectView({
             </button>
           )}
 
+          {/* Exportar proyecto a CSV */}
+          <button
+            className="btn btn--ghost btn--sm"
+            onClick={handleExportProject}
+            disabled={exporting}
+            aria-label="Exportar proyecto a CSV"
+            title="Exportar proyecto, hitos y tarjetas a un archivo .csv"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            {exporting ? 'Exportando...' : 'Exportar'}
+          </button>
+
+          {/* Importar proyecto desde CSV */}
+          <button
+            className="btn btn--ghost btn--sm"
+            onClick={() => setShowImportModal(true)}
+            aria-label="Importar proyecto desde CSV"
+            title="Importar hitos y tarjetas desde un archivo .csv a este proyecto"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            Importar
+          </button>
+
           <button
             className="btn btn--ghost btn--sm"
             onClick={() => setShowEditProject(true)}
@@ -465,6 +538,18 @@ export default function ProjectView({
           project={project}
           currentMembers={members}
           onClose={() => setShowInvite(false)}
+        />
+      )}
+
+      {showImportModal && (
+        <ImportProjectModal
+          project={project}
+          onImportSuccess={async () => {
+            setShowImportModal(false)
+            await fetchAll()
+            setRefreshKey(prev => prev + 1)
+          }}
+          onClose={() => setShowImportModal(false)}
         />
       )}
 
