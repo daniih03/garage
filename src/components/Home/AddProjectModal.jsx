@@ -111,7 +111,7 @@ export default function AddProjectModal({ existingProjects, onClose }) {
       user?.user_metadata?.user_name?.toLowerCase(),
     ].filter(Boolean)))
 
-    const { error: dbError } = await supabase.from('projects').insert({
+    const { data: newProj, error: dbError } = await supabase.from('projects').insert({
       repo_full_name:       selected.full_name,
       repo_name:            trimmedName,
       repo_url:             selected.html_url,
@@ -119,7 +119,7 @@ export default function AddProjectModal({ existingProjects, onClose }) {
       description:          projectDesc.trim() || null,
       created_by:           user?.id ?? null,
       github_collaborators: collabsList,
-    })
+    }).select().single()
 
     if (dbError) {
       if (dbError.code === '23505') {
@@ -128,9 +128,20 @@ export default function AddProjectModal({ existingProjects, onClose }) {
         setError(dbError.message)
       }
       setSaving(false)
-    } else {
-      onClose()
+      return
     }
+
+    // Asegurar explícitamente al creador en project_members como owner
+    if (newProj && user) {
+      await supabase.from('project_members').upsert({
+        project_id: newProj.id,
+        user_id:    user.id,
+        added_by:   user.id,
+        role:       'owner',
+      }, { onConflict: 'project_id, user_id' })
+    }
+
+    onClose()
   }
 
   const filteredRepos = repos.filter(r =>

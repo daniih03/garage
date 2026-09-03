@@ -100,7 +100,8 @@ garage/
 ├── supabase/
 │   ├── schema.sql               # Schema completo de Supabase con tablas, RLS y funciones
 │   ├── migration_add_leave_kick_policy.sql  # Migración: política DELETE en project_members
-│   └── migration_roles_and_notifications.sql # Migración: roles RBAC, user_notifications y RLS reforzado
+│   ├── migration_roles_and_notifications.sql # Migración: roles RBAC, user_notifications y RLS reforzado
+│   └── migration_fix_milestones_and_invites.sql # Migración: fix hitos, RLS creator owner, eliminación auto-invitaciones
 └── vite.config.js               # Config Vite con base: '/garage/'
 ```
 
@@ -178,7 +179,8 @@ Tabla global por usuario para invitaciones, cambios de rango y expulsiones.
 | `created_at` | timestamptz | |
 
 **UNIQUE:** `(project_id, number)`
-**RLS:** Mutaciones (`INSERT`, `UPDATE`, `DELETE`) restringidas a roles `'owner'` y `'admin'`.
+**UNIQUE:** `(project_id, number)`
+**RLS:** Mutaciones (`INSERT`, `UPDATE`, `DELETE`) restringidas a roles `'owner'` y `'admin'` (evaluadas mediante `get_project_role` o por coincidencia directa de `projects.created_by = auth.uid()`).
 
 #### `cards`
 | Columna | Tipo | Descripción |
@@ -213,10 +215,10 @@ Tabla global por usuario para invitaciones, cambios de rango y expulsiones.
 
 ### Funciones RPC Supabase
 
-- **`get_project_role(p_id uuid, u_id uuid)`**: Retorna el rol efectivo (`owner`, `admin`, `member`, `guest`) de un usuario en un proyecto.
-- **`sync_user_projects(user_repos text[], github_user text)`**: Sincroniza automáticamente al usuario con proyectos donde esté como colaborador GitHub. Se llama en cada carga de `HomePage`.
+- **`get_project_role(p_id uuid, u_id uuid)`**: Retorna el rol efectivo (`owner`, `admin`, `member`, `guest`) de un usuario en un proyecto. Si `projects.created_by = u_id`, garantiza retornar `'owner'`.
+- **`sync_user_projects(user_repos text[], github_user text)`**: Registra o actualiza el username del usuario en `profiles`. Ya no auto-enrola ni inserta membresías automáticamente en `project_members`.
 - **`handle_new_user()`** (trigger): Crea el perfil automáticamente al registrarse.
-- **`auto_add_known_collaborators()`** (trigger): Al crear un proyecto, auto-añade al creador con rol `owner` y a los colaboradores GitHub conocidos con rol `member`.
+- **`auto_add_known_collaborators()`** (trigger): Al crear un proyecto, añade únicamente al creador con rol `owner`. Se eliminó la auto-invitación de colaboradores de GitHub.
 
 ### Realtime
 Todos los canales suscritos usan `postgres_changes`:
@@ -269,13 +271,22 @@ Formato: `ACRONIMO-MS-NNN`
 - Al marcar como leídas (individualmente o con "Marcar todas como leídas"), el badge numérico y el color rojo desaparecen.
 
 ### Sistema de Invitaciones de Proyecto
-Las invitaciones **no son una tabla separada**; se detectan desde `project_members`:
-- Si `added_by !== user.id` AND `!isCreator` AND no está en `garage_accepted_invites_{userId}` → aparece como invitación pendiente
-- **Aceptar:** Añade al array `garage_accepted_invites_{userId}` en localStorage, mueve al listado activo
-- **Denegar:** Añade al array `garage_declined_invites_{userId}` en localStorage Y borra el row de `project_members` en DB
-- Si se limpia localStorage, las invitaciones aceptadas/rechazadas vuelven a aparecer como pendientes
+Las invitaciones son **estrictamente manuales y explícitas**:
+- Ya no se auto-invita a colaboradores de GitHub al registrar un proyecto nuevo ni mediante auto-sync de repositorios.
+- Para invitar a un usuario, un `owner` o `admin` debe hacerlo expresamente desde el modal de invitación (`InviteModal.jsx`).
+- Al invitar, se inserta la membresía en `project_members` (rol `'member'`) y una notificación `project_invite` en `user_notifications`.
+- **Campana de notificaciones como único canal:** La invitación aparece y se gestiona **exclusivamente en la campana de notificaciones de la cabecera (`NotificationBell.jsx`)**, donde el usuario puede Aceptar o Rechazar. Se eliminó cualquier banner o cuadro central en `HomePage`.
+- **Aceptar:** El invitado pulsa "Aceptar" en la campana. La notificación se marca como leída y el proyecto pasa a mostrarse inmediatamente en su grid de proyectos activos de `HomePage`.
+- **Rechazar:** El invitado pulsa "Rechazar" en la campana. Se elimina su fila de `project_members` y se marca la notificación como leída.
+- En `HomePage.jsx`, los proyectos con invitaciones pendientes no aceptadas permanecen ocultos del grid principal.
 
-> ⚠️ **Gotcha conocido:** Si el usuario fue añadido por auto-sync (`sync_user_projects`) con `added_by = created_by`, el proyecto se considera "activo" directamente, no como invitación pendiente.
+### Permisos de Eliminación en Tarjetas de Proyecto (`ProjectCard`)
+- En el visualizador principal (`HomePage.jsx`), el icono de la papelera para eliminar un proyecto solo se renderiza si el usuario actual es el `owner` del proyecto (`project.created_by === currentUser.id` o rol `owner`). Los colaboradores (`admin`, `member`, `guest`) no ven el botón de papelera.
+
+### Creación y Gestión de Hitos
+- **Cálculo seguro de correlativo:** En `MilestoneModal.jsx` y `MilestoneBar.jsx`, el número de nuevo hito se calcula con `Math.max(0, ...milestones.map(m => m.number || 0)) + 1` y se contrasta en tiempo real con el `MAX(number)` existente en la base de datos para prevenir conflictos de `UNIQUE(project_id, number)`.
+- **Actualización inmediata de UI:** `MilestoneModal` no depende únicamente del canal Realtime; invoca el callback `onMilestoneCreated(createdMilestone)` devuelto por `.select().single()`, integrándolo al instante en el estado local de `ProjectView` y seleccionándolo si no había un hito activo previo.
+- **Acceso rápido en proyectos vacíos:** Cuando un proyecto no tiene hitos (`milestones.length === 0`), si el usuario tiene rol `owner` o `admin`, se muestra un botón central prominente *"Crear primer hito"* para facilitar la configuración inicial.
 
 ### Menciones de Tarjetas (`@DISPLAY_ID`)
 - En título y descripción de `CardModal`, escribir `@` despliega un autocomplete con las tarjetas del mismo hito (excluyendo la tarjeta actual)
@@ -324,20 +335,34 @@ Las invitaciones **no son una tabla separada**; se detectan desde `project_membe
 - Botón "Marcar todas como leídas" y marcado individual.
 
 ### `HomePage.jsx`
-- Carga proyectos activos + detección de invitaciones pendientes
-- Caja de notificación de invitaciones (aceptar/denegar)
-- Invoca `sync_user_projects` RPC al montar
-- Realtime en `projects` y `project_members`
+- Carga proyectos activos donde el usuario es creador o miembro aceptado.
+- Oculta proyectos con invitaciones pendientes que no hayan sido aceptadas aún por el usuario.
+- Notificaciones de invitación centralizadas exclusivamente en la campana de cabecera (`NotificationBell.jsx`), sin banner ni caja central.
+- Evalúa si el usuario es `owner` de cada proyecto para restringir la visibilidad del botón de papelera en `ProjectCard`.
+- Invoca `sync_user_projects` RPC al montar para mantener actualizado el perfil.
+- Realtime en `projects` y `project_members`.
+
+### `ProjectCard.jsx`
+- Tarjeta de proyecto con progress ring y métricas de tarjetas e hitos completados.
+- Recibe prop `isOwner`: el botón de papelera para eliminar proyecto (`project-card__action-btn--delete`) solo se muestra y habilita si `isOwner && onDelete`.
+
+### `AddProjectModal.jsx`
+- Modal para registrar nuevo proyecto desde GitHub.
+- Inserta el proyecto en `projects` y asegura explícitamente al creador en `project_members` con rol `'owner'`.
+- No auto-invita a ningún colaborador de GitHub.
 
 ### `ProjectView.jsx`
 - Carga miembros basándose **estrictamente en `project_members`** con sus roles correspondientes y detecta el rol del usuario actual (`currentUserRole`).
+- Si el usuario actual es el creador (`project.created_by`), auto-repara su membresía en `project_members` con rol `'owner'` si faltara en BD.
 - Barra de miembros con avatares, conteo de colaboradores y botón *"Administrar colaboradores"* (visible solo para `owner` y `admin`).
 - Expulsión directa desde avatar restringida por jerarquía RBAC.
 - Botón "Salir" del proyecto disponible para todos los miembros excepto el `owner`.
 - Botones de acción del proyecto condicionados por rol:
   - "Nuevo hito", "Invitar", "Editar", "Exportar CSV", "Importar CSV": solo `owner` y `admin`.
   - "Eliminar proyecto": exclusivo de `owner`.
-- Modales: Invitar, Administrar Miembros, Importar Proyecto (CSV), Editar Proyecto, Eliminar Proyecto, Expulsar Miembro, Salir del Proyecto.
+- Estado vacío (`milestones.length === 0`): muestra botón destacado "Crear primer hito" para roles con privilegios (`owner`, `admin`).
+- Conexión inmediata de hitos vía `handleMilestoneCreated` sin esperar a Realtime.
+- Modales: Invitar, Administrar Miembros, Importar Proyecto (CSV), Editar Proyecto, Eliminar Proyecto, Expulsar Miembro, Salir del Proyecto, Crear Hito.
 
 ### `ManageMembersModal.jsx`
 - Administración integral de colaboradores y roles:
@@ -350,7 +375,14 @@ Las invitaciones **no son una tabla separada**; se detectan desde `project_membe
 
 ### `MilestoneBar.jsx`
 - Barra de selección de hitos con progreso.
+- Cálculo de `nextNumber` seguro mediante `Math.max(0, ...milestones.map(m => m.number || 0)) + 1`.
 - Botón "Nuevo hito" y botones de edición/eliminación de hito en pestañas visibles únicamente para `owner` y `admin`.
+- Conecta `onMilestoneCreated` recibido del padre a `MilestoneModal`.
+
+### `MilestoneModal.jsx`
+- Modal para crear y editar hitos.
+- Consulta el número máximo real en base de datos antes de insertar para prevenir violaciones de `UNIQUE(project_id, number)`.
+- Invoca el callback `onMilestoneCreated` con el registro retornado por Supabase (`select().single()`) para refresco inmediato de interfaz.
 
 ### `Board.jsx`
 - Estado: `cards`, `allProjectCards`, `commentsMeta`, `viewedMap`, `currentUser`, `currentUserRole`, filtros.
@@ -435,21 +467,94 @@ Las invitaciones **no son una tabla separada**; se detectan desde `project_membe
 
 Las siguientes queries deben haberse ejecutado en el SQL Editor de Supabase (además del `schema.sql` base):
 
-```sql
--- Política para salir del proyecto (yo mismo) o expulsar miembros (solo el creador del proyecto)
-CREATE POLICY "Salir o expulsar miembros" ON project_members
-  FOR DELETE USING (
-    user_id = auth.uid()
-    OR
-    EXISTS (
-      SELECT 1 FROM projects p
-      WHERE p.id = project_members.project_id
-        AND p.created_by = auth.uid()
-    )
-  );
-```
+### 1. Migración de Roles y Notificaciones Globales
+> Archivo: `supabase/migration_roles_and_notifications.sql`
 
-> El archivo `supabase/migration_add_leave_kick_policy.sql` contiene esta migración.
+### 2. Migración: Corrección de hitos y eliminación de auto-invitaciones
+> Archivo: `supabase/migration_fix_milestones_and_invites.sql`
+
+```sql
+-- 1. Actualizar get_project_role para que si el usuario es el creador del proyecto (projects.created_by),
+-- devuelva siempre 'owner', incluso si su registro en project_members faltase o tuviera otro rol.
+CREATE OR REPLACE FUNCTION get_project_role(p_id uuid, u_id uuid)
+RETURNS text LANGUAGE plpgsql STABLE SECURITY DEFINER AS $$
+DECLARE
+  v_role text;
+  v_creator uuid;
+BEGIN
+  -- Si es el creador del proyecto en la tabla projects, es inequívocamente el owner
+  SELECT created_by INTO v_creator FROM projects WHERE id = p_id;
+  IF v_creator IS NOT NULL AND v_creator = u_id THEN
+    RETURN 'owner';
+  END IF;
+
+  SELECT role INTO v_role FROM project_members WHERE project_id = p_id AND user_id = u_id LIMIT 1;
+  RETURN v_role;
+END;
+$$;
+
+-- 2. Asegurar que todos los creadores de proyectos existentes tengan registro en project_members con rol 'owner'
+INSERT INTO project_members (project_id, user_id, added_by, role)
+SELECT id, created_by, created_by, 'owner'
+FROM projects
+WHERE created_by IS NOT NULL
+ON CONFLICT (project_id, user_id) DO UPDATE SET role = 'owner';
+
+-- 3. Reforzar las políticas RLS sobre la tabla milestones
+DROP POLICY IF EXISTS "Ver hitos miembros" ON milestones;
+CREATE POLICY "Ver hitos miembros" ON milestones
+  FOR SELECT USING (
+    get_project_role(project_id, auth.uid()) IS NOT NULL
+    OR
+    EXISTS (SELECT 1 FROM projects p WHERE p.id = milestones.project_id AND p.created_by = auth.uid())
+  );
+
+DROP POLICY IF EXISTS "Gestionar hitos (Owner y Admin)" ON milestones;
+CREATE POLICY "Gestionar hitos (Owner y Admin)" ON milestones
+  FOR ALL USING (
+    get_project_role(project_id, auth.uid()) IN ('owner', 'admin')
+    OR
+    EXISTS (SELECT 1 FROM projects p WHERE p.id = milestones.project_id AND p.created_by = auth.uid())
+  )
+  WITH CHECK (
+    get_project_role(project_id, auth.uid()) IN ('owner', 'admin')
+    OR
+    EXISTS (SELECT 1 FROM projects p WHERE p.id = milestones.project_id AND p.created_by = auth.uid())
+  );
+
+-- 4. Actualizar trigger on_project_created para que SOLO añada al creador como 'owner'.
+-- Ya NO se auto-invitan colaboradores de GitHub. Toda invitación debe ser explícita.
+CREATE OR REPLACE FUNCTION auto_add_known_collaborators()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  -- Añadir creador con rol 'owner'
+  IF NEW.created_by IS NOT NULL THEN
+    INSERT INTO project_members (project_id, user_id, added_by, role)
+    VALUES (NEW.id, NEW.created_by, NEW.created_by, 'owner')
+    ON CONFLICT (project_id, user_id) DO UPDATE SET role = 'owner';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+-- 5. Actualizar sync_user_projects para que NO auto-enrole en proyectos.
+CREATE OR REPLACE FUNCTION sync_user_projects(user_repos text[], github_user text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF github_user IS NOT NULL THEN
+    INSERT INTO profiles (id, github_username)
+    VALUES (auth.uid(), lower(github_user))
+    ON CONFLICT (id) DO UPDATE SET
+      github_username = lower(EXCLUDED.github_username);
+  END IF;
+END;
+$$;
+```
 
 ---
 
@@ -490,6 +595,7 @@ CREATE POLICY "Salir o expulsar miembros" ON project_members
 | 30 | Exportar e Importar proyecto completo en formato .csv con hitos y tarjetas | `b5a9fdd` |
 | 31 | Sistema de Rangos de Usuario (Owner, Admin, Member, Guest), Campana de Notificaciones interactiva y Gestión de Colaboradores | `28c4863` |
 | 32 | Fix persistencia de miembros expulsados, bloqueo de exportar CSV a Member/Guest y ordenación jerárquica de roles en modal | `5d2fca2` |
+| 33 | Corrección de creación de hitos, eliminación de auto-invitaciones de GitHub, centralización de invitaciones en campana de cabecera y restricción de papelera de proyecto solo a Owner | `c1afa6e` |
 
 ---
 

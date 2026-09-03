@@ -4,6 +4,7 @@ import { fetchRepoCollaboratorsDetails, getStoredProviderToken } from '../../lib
 import { generateProjectCSV, downloadCSV } from '../../lib/csvExportImport'
 import { createUserNotification } from '../../lib/notifications'
 import MilestoneBar from './MilestoneBar'
+import MilestoneModal from './MilestoneModal'
 import InviteModal from './InviteModal'
 import ManageMembersModal from './ManageMembersModal'
 import ImportProjectModal from './ImportProjectModal'
@@ -28,6 +29,7 @@ export default function ProjectView({
   const [refreshKey,         setRefreshKey]         = useState(0)
   const [showInvite,         setShowInvite]         = useState(false)
   const [showManageMembers,  setShowManageMembers]  = useState(false)
+  const [showCreateMilestone, setShowCreateMilestone] = useState(false)
   const [showEditProject,    setShowEditProject]    = useState(false)
   const [showDeleteProject,  setShowDeleteProject]  = useState(false)
   const [memberToKick,       setMemberToKick]       = useState(null)
@@ -152,6 +154,15 @@ export default function ProjectView({
       if (sessionUser) {
         if (project.created_by === sessionUser.id) {
           currentRole = 'owner'
+          // Si el creador no estaba en project_members en BD, asegurar su inserción como owner
+          if (!roleByUser.has(sessionUser.id)) {
+            supabase.from('project_members').upsert({
+              project_id: project.id,
+              user_id: sessionUser.id,
+              added_by: sessionUser.id,
+              role: 'owner',
+            }, { onConflict: 'project_id, user_id' }).then(() => {})
+          }
         } else if (roleByUser.has(sessionUser.id)) {
           currentRole = roleByUser.get(sessionUser.id) || 'member'
         }
@@ -296,6 +307,18 @@ export default function ProjectView({
           }
         }
       }
+    }
+  }
+
+  function handleMilestoneCreated(created) {
+    if (!created) return
+    setMilestones(prev => {
+      const exists = prev.some(m => m.id === created.id)
+      const list = exists ? prev.map(m => m.id === created.id ? created : m) : [...prev, created]
+      return list.sort((a, b) => a.number - b.number)
+    })
+    if (!activeMilestone) {
+      onMilestoneChange(created)
     }
   }
 
@@ -581,6 +604,7 @@ export default function ProjectView({
         activeMilestone={activeMilestone}
         currentUserRole={currentUserRole}
         onSelectMilestone={onMilestoneChange}
+        onMilestoneCreated={handleMilestoneCreated}
         onUpdateMilestone={handleUpdateMilestone}
         onDeleteMilestone={handleDeleteMilestone}
       />
@@ -592,6 +616,19 @@ export default function ProjectView({
           <p className="project-empty__desc">
             Crea el primer hito para empezar a añadir tarjetas al tablero.
           </p>
+          {(currentUserRole === 'owner' || currentUserRole === 'admin') && (
+            <button
+              type="button"
+              className="btn btn--primary"
+              style={{ marginTop: 14 }}
+              onClick={() => setShowCreateMilestone(true)}
+            >
+              <svg width="13" height="13" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+                <path d="M7.5 2v11M2 7.5h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              Crear primer hito
+            </button>
+          )}
         </div>
       ) : activeMilestone ? (
         <Board
@@ -601,6 +638,15 @@ export default function ProjectView({
           refreshKey={refreshKey}
         />
       ) : null}
+
+      {showCreateMilestone && (
+        <MilestoneModal
+          project={project}
+          nextNumber={Math.max(0, ...milestones.map(m => m.number || 0)) + 1}
+          onMilestoneCreated={handleMilestoneCreated}
+          onClose={() => setShowCreateMilestone(false)}
+        />
+      )}
 
       {showManageMembers && (
         <ManageMembersModal

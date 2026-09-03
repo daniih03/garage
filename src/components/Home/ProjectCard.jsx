@@ -43,7 +43,7 @@ function ProgressRing({ percent, size = 68, strokeWidth = 6 }) {
   )
 }
 
-export default function ProjectCard({ project, onClick, onEdit, onDelete }) {
+export default function ProjectCard({ project, isOwner = false, onClick, onEdit, onDelete }) {
   const [stats, setStats] = useState({
     milestonesTotal: 0,
     milestonesDone: 0,
@@ -149,7 +149,7 @@ export default function ProjectCard({ project, onClick, onEdit, onDelete }) {
               </button>
             )}
 
-            {onDelete && (
+            {isOwner && onDelete && (
               <button
                 type="button"
                 className="project-card__action-btn project-card__action-btn--delete"

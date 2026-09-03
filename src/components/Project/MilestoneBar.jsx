@@ -9,6 +9,7 @@ export default function MilestoneBar({
   activeMilestone,
   currentUserRole,
   onSelectMilestone,
+  onMilestoneCreated,
   onUpdateMilestone,
   onDeleteMilestone,
 }) {
@@ -17,7 +18,7 @@ export default function MilestoneBar({
   const [milestoneToDelete, setMilestoneToDelete] = useState(null)
 
   const canManageMilestones = currentUserRole === 'owner' || currentUserRole === 'admin'
-  const nextNumber = (milestones[milestones.length - 1]?.number ?? 0) + 1
+  const nextNumber = Math.max(0, ...milestones.map(m => m.number || 0)) + 1
 
   async function handleConfirmDelete(m) {
     if (onDeleteMilestone) {
@@ -131,6 +132,9 @@ export default function MilestoneBar({
         <MilestoneModal
           project={project}
           nextNumber={nextNumber}
+          onMilestoneCreated={created => {
+            onMilestoneCreated?.(created)
+          }}
           onClose={() => setShowModal(false)}
         />
       )}

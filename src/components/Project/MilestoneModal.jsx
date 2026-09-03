@@ -6,6 +6,7 @@ export default function MilestoneModal({
   project,
   milestone = null,
   nextNumber,
+  onMilestoneCreated,
   onMilestoneUpdated,
   onClose,
 }) {
@@ -49,16 +50,39 @@ export default function MilestoneModal({
         onClose()
       }
     } else {
-      const { error: dbError } = await supabase.from('milestones').insert({
-        project_id: project.id,
-        number:     nextNumber,
-        title:      trimmed,
-      })
+      // 1. Obtener número máximo real de la BD para evitar violaciones de UNIQUE(project_id, number)
+      let calculatedNumber = nextNumber || 1
+      try {
+        const { data: maxRow } = await supabase
+          .from('milestones')
+          .select('number')
+          .eq('project_id', project.id)
+          .order('number', { ascending: false })
+          .limit(1)
+
+        if (maxRow && maxRow.length > 0 && typeof maxRow[0].number === 'number') {
+          calculatedNumber = Math.max(calculatedNumber, maxRow[0].number + 1)
+        }
+      } catch (err) {
+        console.warn('Error verificando max milestone number:', err)
+      }
+
+      // 2. Insertar hito devolviendo la fila creada
+      const { data: createdMilestone, error: dbError } = await supabase
+        .from('milestones')
+        .insert({
+          project_id: project.id,
+          number:     calculatedNumber,
+          title:      trimmed,
+        })
+        .select()
+        .single()
 
       if (dbError) {
         setError(dbError.message)
         setSaving(false)
       } else {
+        onMilestoneCreated?.(createdMilestone)
         onClose()
       }
     }
