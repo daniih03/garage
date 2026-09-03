@@ -426,6 +426,11 @@ export default function CardModal({
                 <h2 className="modal__title" id="card-modal-title">
                   {isEditing ? 'Editar tarjeta' : 'Nueva tarjeta'}
                 </h2>
+                {isEditing && card?.created_at && (
+                  <span className="modal__header-date" title={`Creada el ${new Date(card.created_at).toLocaleString('es')}`}>
+                    {formatDate(card.created_at)}
+                  </span>
+                )}
               </div>
               <button type="button" className="modal__close" onClick={onClose} aria-label="Cerrar">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">

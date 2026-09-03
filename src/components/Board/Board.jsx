@@ -43,6 +43,21 @@ function compareCardsByPriority(a, b) {
   if (weightB !== weightA) {
     return weightB - weightA // Higher priority first
   }
+
+  // Si coinciden en todos los tags (prioridad, primario y secundario),
+  // se sitúa más arriba la que se creó primero (fecha más antigua)
+  const tagsMatch =
+    (a.primary_type ?? '') === (b.primary_type ?? '') &&
+    (a.secondary_type ?? '') === (b.secondary_type ?? '')
+
+  if (tagsMatch) {
+    const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+    const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+    if (timeA && timeB && timeA !== timeB) {
+      return timeA - timeB // Más antigua primero (arriba)
+    }
+  }
+
   return (a.position ?? 0) - (b.position ?? 0)
 }
 

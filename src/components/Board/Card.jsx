@@ -13,6 +13,21 @@ export function renderTextWithMentions(text) {
   })
 }
 
+export function formatCardDate(iso) {
+  if (!iso) return ''
+  try {
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return ''
+    return new Intl.DateTimeFormat('es', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).format(d)
+  } catch {
+    return ''
+  }
+}
+
 export default function Card({
   card,
   isDragging,
@@ -94,6 +109,21 @@ export default function Card({
           <p className="card__description">{renderTextWithMentions(card.description)}</p>
         )}
       </div>
+
+      {/* Footer: Fecha de creación */}
+      {card.created_at && (
+        <div className="card__footer">
+          <span className="card__date" title={`Creada el ${new Date(card.created_at).toLocaleString('es')}`}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            {formatCardDate(card.created_at)}
+          </span>
+        </div>
+      )}
 
       {/* Delete (visible on hover) */}
       <div className="card__actions" onClick={e => e.stopPropagation()}>
