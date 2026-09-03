@@ -77,7 +77,7 @@ garage/
 │       │   ├── Header.jsx       # Cabecera global con logo, navegación, badge de rol y campana
 │       │   └── NotificationBell.jsx # Campana de notificaciones con badge no leídas y dropdown interactivo
 │       ├── Home/
-│       │   ├── HomePage.jsx     # Vista principal: lista de proyectos + notificaciones de invitación
+│       │   ├── HomePage.jsx     # Vista principal: lista de proyectos activos con permisos según rol
 │       │   ├── ProjectCard.jsx  # Tarjeta de proyecto con progress ring y métricas
 │       │   ├── AddProjectModal.jsx    # Modal para añadir nuevo proyecto desde GitHub
 │       │   └── EditProjectModal.jsx   # Modal para editar proyecto existente
@@ -101,7 +101,7 @@ garage/
 │   ├── schema.sql               # Schema completo de Supabase con tablas, RLS y funciones
 │   ├── migration_add_leave_kick_policy.sql  # Migración: política DELETE en project_members
 │   ├── migration_roles_and_notifications.sql # Migración: roles RBAC, user_notifications y RLS reforzado
-│   └── migration_fix_milestones_and_invites.sql # Migración: fix hitos, RLS creator owner, eliminación auto-invitaciones
+│   └── migration_fix_milestones_and_invites.sql # Migración: fix hitos, RLS creator owner, eliminación auto-invitaciones y status en BD
 └── vite.config.js               # Config Vite con base: '/garage/'
 ```
 
@@ -150,7 +150,7 @@ Creada automáticamente al hacer login via trigger `on_auth_user_created`.
 **RLS:**
 - `SELECT`: Solo ver tu propio row (`user_id = auth.uid()`)
 - `INSERT`: Solo si eres Admin u Owner del proyecto
-- `UPDATE`: Owner puede cambiar roles de Admin, Member y Guest; Admin solo de Member y Guest. Anti-auto-bloqueo.
+- `UPDATE`: Owner puede cambiar roles de Admin, Member y Guest; Admin solo de Member y Guest. El propio usuario puede actualizar su status para aceptar invitaciones.
 - `DELETE`: Si eres tú mismo (salir, no aplica a Owner) O según jerarquía de roles (Owner puede expulsar a cualquiera; Admin a Member y Guest).
 
 #### `user_notifications`
@@ -179,7 +179,6 @@ Tabla global por usuario para invitaciones, cambios de rango y expulsiones.
 | `title` | text | Nombre del hito |
 | `created_at` | timestamptz | |
 
-**UNIQUE:** `(project_id, number)`
 **UNIQUE:** `(project_id, number)`
 **RLS:** Mutaciones (`INSERT`, `UPDATE`, `DELETE`) restringidas a roles `'owner'` y `'admin'` (evaluadas mediante `get_project_role` o por coincidencia directa de `projects.created_by = auth.uid()`).
 
@@ -333,6 +332,7 @@ Las invitaciones son **estrictamente manuales, explícitas y gobernadas al 100% 
   - `project_invite`: permite aceptar o declinar invitaciones directamente.
   - `role_change`: notifica cambios de rol (ascensos y degradaciones).
   - `project_kick`: notifica expulsiones de proyectos.
+- Botón individual `✕` en cada notificación para eliminarla permanentemente de la base de datos y de la vista.
 - Botón "Marcar todas como leídas" y marcado individual.
 
 ### `HomePage.jsx`
@@ -408,7 +408,7 @@ Las invitaciones son **estrictamente manuales, explícitas y gobernadas al 100% 
 
 ### `InviteModal.jsx`
 - Autocompletado en tiempo real sobre `profiles`.
-- Bloquea duplicados e inserta registros en `project_members` con `role = 'member'` e inserta notificación en `user_notifications`.
+- Bloquea duplicados para usuarios activos e inserta/re-invita registros en `project_members` con `status = 'pending'`, `role = 'member'` y genera la notificación en `user_notifications`.
 
 ---
 
@@ -427,7 +427,7 @@ Las invitaciones son **estrictamente manuales, explícitas y gobernadas al 100% 
   - `--transition`, `--ease-out`
 - **Componentes específicos añadidos:**
   - `.header-role-badge` y sus variantes `--owner`, `--admin`, `--member`, `--guest`.
-  - `.notif-wrapper`, `.notif-bell-btn`, `.notif-badge`, `.notif-dropdown`, `.notif-item`.
+  - `.notif-wrapper`, `.notif-bell-btn`, `.notif-badge`, `.notif-dropdown`, `.notif-item`, `.notif-item__top-right`, `.notif-item__delete-btn`.
   - `.manage-members-list`, `.manage-member-row`, `.role-select`, `.btn-kick-member`.
 - **Mobile:** `@media (max-width: 768px)` al final del fichero. El Kanban se convierte en carrusel horizontal swipeable. Nunca tocar estilos desktop al hacer cambios mobile.
 - **Clases de badges:**
