@@ -328,8 +328,9 @@ Las invitaciones son **estrictamente manuales, explícitas y gobernadas al 100% 
 
 ### `NotificationBell.jsx`
 - Botón campana con badge numérico rojo animado si existen notificaciones no leídas (`user_notifications` con `read = false`).
+- Iconos vectoriales SVG nítidos para estado vacío (sin emojis) y para cada tipo de notificación (`project_invite`, `role_change`, `project_kick`).
 - Desplegable interactivo en tiempo real (`postgres_changes`):
-  - `project_invite`: permite aceptar o declinar invitaciones directamente.
+  - `project_invite`: permite aceptar o declinar invitaciones directamente. Las opciones de acción se mantienen siempre visibles sin ocultarse al hacer clic en el cuerpo de la notificación.
   - `role_change`: notifica cambios de rol (ascensos y degradaciones).
   - `project_kick`: notifica expulsiones de proyectos.
 - Botón individual `✕` en cada notificación para eliminarla permanentemente de la base de datos y de la vista.
@@ -362,7 +363,7 @@ Las invitaciones son **estrictamente manuales, explícitas y gobernadas al 100% 
 - Botones de acción del proyecto condicionados por rol:
   - "Nuevo hito", "Invitar", "Editar", "Exportar CSV", "Importar CSV": solo `owner` y `admin`.
   - "Eliminar proyecto": exclusivo de `owner`.
-- Estado vacío (`milestones.length === 0`): muestra botón destacado "Crear primer hito" para roles con privilegios (`owner`, `admin`).
+- Estado vacío (`milestones.length === 0`): muestra icono SVG vectorizado de bandera nítido y botón destacado "Crear primer hito" para roles con privilegios (`owner`, `admin`).
 - Conexión inmediata de hitos vía `handleMilestoneCreated` con **deduplicación estricta** frente al evento `INSERT` de Supabase Realtime, evitando duplicados visuales temporales.
 - Modales: Invitar, Administrar Miembros, Importar Proyecto (CSV), Editar Proyecto, Eliminar Proyecto, Expulsar Miembro, Salir del Proyecto, Crear Hito.
 
@@ -625,6 +626,7 @@ CREATE POLICY "Actualizar propio status de membresía" ON project_members
 | 32 | Fix persistencia de miembros expulsados, bloqueo de exportar CSV a Member/Guest y ordenación jerárquica de roles en modal | `5d2fca2` |
 | 33 | Corrección de creación de hitos, eliminación de auto-invitaciones de GitHub, centralización de invitaciones en campana de cabecera con ciclo de vida gobernado por status en BD, borrado individual de notificaciones (botón ✕) y restricción de papelera de proyecto solo a Owner | `01f33c9` |
 | 34 | Redirección automática de usuarios expulsados a la vista de proyectos y deduplicación de hitos frente a eventos Realtime | `661358e` |
+| 35 | Reemplazo de emojis por SVG vectoriales en notificaciones y estado vacío de hitos, y persistencia de acciones de invitación al interactuar con la notificación | `d323f5c` |
 
 ---
 

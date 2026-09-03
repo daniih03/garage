@@ -634,7 +634,12 @@ export default function ProjectView({
 
       {milestones.length === 0 ? (
         <div className="project-empty animate-fade-up">
-          <div className="project-empty__icon">🏁</div>
+          <div className="project-empty__icon">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent)', opacity: 0.85, margin: '0 auto' }} aria-hidden="true">
+              <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+              <line x1="4" y1="22" x2="4" y2="15" />
+            </svg>
+          </div>
           <h2 className="project-empty__title">Sin hitos todavía</h2>
           <p className="project-empty__desc">
             Crea el primer hito para empezar a añadir tarjetas al tablero.
