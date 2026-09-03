@@ -50,7 +50,7 @@ export default function Board({ project, milestone, refreshKey }) {
   const [cards,           setCards]           = useState([])
   const [allProjectCards, setAllProjectCards] = useState([])
   const [loading,         setLoading]         = useState(true)
-  const [modal,           setModal]           = useState({ open: false, card: null, defaultStatus: 'todo' })
+  const [modal,           setModal]           = useState({ open: false, card: null, defaultStatus: '' })
   const [draggingId,      setDraggingId]      = useState(null)
   const [cardToDelete,    setCardToDelete]    = useState(null)
   const [currentUser,     setCurrentUser]     = useState(null)
@@ -210,7 +210,7 @@ export default function Board({ project, milestone, refreshKey }) {
     })
   }
 
-  function handleOpenCard(card, defaultStatus = 'todo') {
+  function handleOpenCard(card, defaultStatus = '') {
     if (card?.id) {
       handleMarkCardViewed(card.id)
     }
@@ -420,7 +420,7 @@ export default function Board({ project, milestone, refreshKey }) {
           <button
             type="button"
             className="board-create-btn"
-            onClick={() => handleOpenCard(null, 'todo')}
+            onClick={() => handleOpenCard(null, '')}
             title="Nueva tarjeta"
           >
             <svg width="13" height="13" viewBox="0 0 15 15" fill="none" aria-hidden="true">
@@ -492,7 +492,7 @@ export default function Board({ project, milestone, refreshKey }) {
             if (modal.card?.id) {
               handleMarkCardViewed(modal.card.id)
             }
-            setModal({ open: false, card: null, defaultStatus: 'todo' })
+            setModal({ open: false, card: null, defaultStatus: '' })
             fetchCards()
           }}
         />

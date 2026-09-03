@@ -44,8 +44,9 @@ export default function CardModal({
 }) {
   const isEditing = Boolean(card)
 
-  const initialStatus = (card?.status === 'inprogress' ? 'doing' : card?.status)
-    ?? (defaultStatus === 'inprogress' ? 'doing' : defaultStatus)
+  const initialStatus = isEditing
+    ? (card?.status === 'inprogress' ? 'doing' : card?.status ?? '')
+    : (defaultStatus ? (defaultStatus === 'inprogress' ? 'doing' : defaultStatus) : '')
 
   /* ── Form state ── */
   const [form, setForm] = useState({
@@ -333,6 +334,10 @@ export default function CardModal({
       setError('El campo Prioridad (Low, Mid, High o Critical) es obligatorio.')
       return
     }
+    if (!form.status) {
+      setError('El campo Estado (To do, Doing, Blocked o Done) es obligatorio.')
+      return
+    }
 
     setSaving(true)
     setError('')
@@ -367,8 +372,11 @@ export default function CardModal({
       const msNum = String(milestone.number).padStart(2, '0')
       const displayId = `${project.repo_acronym}-${msNum}-${String(nextNum).padStart(3, '0')}`
 
-      const position = cardsInStatus.length > 0
-        ? Math.max(...cardsInStatus.map(c => c.position)) + 1
+      const targetStatusCards = (milestoneCards.length > 0 ? milestoneCards : (cardsInStatus || []))
+        .filter(c => c.status === form.status || (form.status === 'doing' && c.status === 'inprogress'))
+
+      const position = targetStatusCards.length > 0
+        ? Math.max(...targetStatusCards.map(c => c.position ?? 0)) + 1
         : 0
 
       ;({ error: dbError } = await supabase.from('cards').insert({
@@ -653,7 +661,9 @@ export default function CardModal({
 
               {/* Status */}
               <div className="form-group">
-                <span className="form-label" id="status-label">Estado</span>
+                <span className="form-label" id="status-label">
+                  Estado <span className="required" aria-hidden="true">*</span>
+                </span>
                 <div className="status-selector" role="radiogroup" aria-labelledby="status-label">
                   {STATUSES.map(s => (
                     <label

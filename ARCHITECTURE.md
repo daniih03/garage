@@ -387,6 +387,8 @@ CREATE POLICY "Salir o expulsar miembros" ON project_members
 | 24 | Expulsar colaboradores (solo dueño) | `f7b7048` |
 | 25 | Salir del proyecto (solo no-dueños) | `f7b7048` |
 | 26 | Migración RLS DELETE en project_members | `f7b7048` |
+| 27 | Botón genérico Nueva tarjeta en barra de filtros y eliminación de '+' en columnas | `84482c4` |
+| 28 | Campo Estado desmarcado por defecto en creación y obligatorio para guardar | Pendiente |
 
 ---
 
