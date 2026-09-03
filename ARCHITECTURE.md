@@ -300,58 +300,83 @@ Las invitaciones **no son una tabla separada**; se detectan desde `project_membe
 ## 8. Componentes Clave — Responsabilidades
 
 ### `App.jsx`
-- Estado global: `session`, `view` (`'home'` | `'project'`), `activeProject`, `activeMilestone`
+- Estado global: `session`, `view` (`'home'` | `'project'`), `activeProject`, `activeMilestone`, `activeUserRole`, `homeRefreshKey`
 - Gestión de sesión y token de GitHub
 - Auto-logout en nuevos deploys
+- Distribuye `activeUserRole` a `Header` y `ProjectView`
+
+### `Header.jsx`
+- Logo Command Garage y navegación breadcrumb interactiva
+- **Campana de notificaciones (`NotificationBell.jsx`):** A la izquierda del badge de rol.
+- **Badge de rol del usuario:** Muestra el rol activo (`OWNER`, `ADMIN`, `MEMBER`, `GUEST`) con estilo y color distintivo inmediatamente a la izquierda del avatar.
+- Menú de usuario con avatar y botón "Salir" de sesión.
+
+### `NotificationBell.jsx`
+- Botón campana con badge numérico rojo animado si existen notificaciones no leídas (`user_notifications` con `read = false`).
+- Desplegable interactivo en tiempo real (`postgres_changes`):
+  - `project_invite`: permite aceptar o declinar invitaciones directamente.
+  - `role_change`: notifica cambios de rol (ascensos y degradaciones).
+  - `project_kick`: notifica expulsiones de proyectos.
+- Botón "Marcar todas como leídas" y marcado individual.
 
 ### `HomePage.jsx`
 - Carga proyectos activos + detección de invitaciones pendientes
-- Caja de notificación de invitaciones (acepar/denegar)
+- Caja de notificación de invitaciones (aceptar/denegar)
 - Invoca `sync_user_projects` RPC al montar
 - Realtime en `projects` y `project_members`
 
 ### `ProjectView.jsx`
-- Barra de miembros: avatares con botón de expulsión (✕ visible al hover, solo para el dueño), indicador propio (borde azul), contador
-- Botón "Salir" del proyecto (solo para no-dueños)
-- Gestión de hitos: CRUD completo con renumeración secuencial
-- Exportación del proyecto completo a archivo `.csv` (con metadatos, hitos y tarjetas)
-- Modales: Invitar, Importar Proyecto (CSV), Editar Proyecto, Eliminar Proyecto, Expulsar Miembro, Salir del Proyecto
+- Carga miembros con roles (`select('user_id, role')`) y detecta el rol del usuario actual (`currentUserRole`).
+- Barra de miembros con avatares, conteo de colaboradores y botón *"Administrar colaboradores"* (visible solo para `owner` y `admin`).
+- Expulsión directa desde avatar restringida por jerarquía RBAC.
+- Botón "Salir" del proyecto disponible para todos los miembros excepto el `owner`.
+- Botones de acción del proyecto condicionados por rol:
+  - "Nuevo hito", "Invitar", "Editar", "Importar CSV": solo `owner` y `admin`.
+  - "Eliminar proyecto": exclusivo de `owner`.
+  - "Exportar CSV": disponible para todos los roles.
+- Modales: Invitar, Administrar Miembros, Importar Proyecto (CSV), Editar Proyecto, Eliminar Proyecto, Expulsar Miembro, Salir del Proyecto.
+
+### `ManageMembersModal.jsx`
+- Administración integral de colaboradores y roles:
+  - Listado de colaboradores con badges de rol y distinción de usuario propio ("Tú").
+  - Dropdown para cambiar rol respetando la jerarquía estricta: `owner` puede asignar `admin`, `member` y `guest`; `admin` solo puede asignar `member` y `guest`.
+  - Regla contra el auto-bloqueo: ningún usuario puede cambiarse el rol a sí mismo ni el `owner` puede ser modificado.
+  - Botón "Expulsar" con confirmación de seguridad `DangerConfirmModal`: `owner` puede expulsar a cualquiera menos a sí mismo; `admin` solo a `member` y `guest`.
+  - Inserta notificaciones globales en `user_notifications` para los usuarios afectados.
+
+### `MilestoneBar.jsx`
+- Barra de selección de hitos con progreso.
+- Botón "Nuevo hito" y botones de edición/eliminación de hito en pestañas visibles únicamente para `owner` y `admin`.
 
 ### `Board.jsx`
-- Estado: `cards`, `allProjectCards`, `commentsMeta`, `viewedMap`, `currentUser`, filtros
-- Barra de filtros: primary (single select), secondary (multi), priority (multi) — con visual pills
-- Botón genérico "Nueva tarjeta" que abre el modal con estado vacío
-- Ordenación con desempate por antigüedad ante tarjetas con tags coincidentes
-- `fetchCards()`: recupera tarjetas + comentarios meta con `activeUser` obtenido síncronamente
-- `handleRealtimeChange()`: INSERT deduplicado, UPDATE, DELETE
-- Pasa `onCardViewed` a `CardModal` para actualizar el mapa de visualización
+- Estado: `cards`, `allProjectCards`, `commentsMeta`, `viewedMap`, `currentUser`, `currentUserRole`, filtros.
+- Permisos RBAC: si el rol es `guest`, se bloquean mutaciones (`canMutateCards = false`):
+  - Botón "Nueva tarjeta" oculto.
+  - Drag & Drop bloqueado en columnas.
+  - Botón eliminar tarjeta oculto.
+  - Abre `CardModal` en modo de solo lectura.
+- Barra de filtros visuales y ordenación por prioridad con desempate por antigüedad.
+- Realtime en `cards` y `card_comments`.
 
 ### `CardModal.jsx`
-- Formulario completo de creación/edición de tarjeta
-- Campo Estado desmarcado por defecto en creación y validado como obligatorio
-- Sistema de menciones `@` con dropdown contextual
-- Vista de comparativa paralela (modal se ensancha con CSS `modal--parallel`)
-- Switcher de tarjetas referenciadas: botones clickables por `@DISPLAY_ID`
-- Sección de comentarios con realtime, delete, y actualización de `viewedMap` al escribir
-- `currentUser` obtenido desde Supabase Auth directamente
+- Formulario de creación/edición de tarjeta. Si `canMutate` es `false` (rol `guest`), oculta los botones de guardar y eliminar, dejando solo el botón "Cerrar".
+- Campo Estado obligatorio al crear tarjeta.
+- Sistema de menciones `@` con vista comparativa paralela.
+- Sección de comentarios con realtime.
 
 ### `Card.jsx`
-- Tarjeta Kanban con drag & drop nativo
-- Badges: `primary_type` | `secondary_type` | `priority` | comentario (rojo relleno = sin leer, contorno = leído)
-- Fecha de creación mostrada en el pie de la tarjeta con formato localizado y tooltip
-- `renderTextWithMentions()`: resalta `@DISPLAY_ID` con `.card-mention-badge`
+- Tarjeta Kanban con badges, menciones `@`, indicador de comentarios no leídos y fecha de creación.
+- `draggable` y botón de borrado deshabilitados si `canMutate` es `false`.
 
 ### `InviteModal.jsx`
-- Autocompletado en tiempo real (debounce 180ms) contra tabla `profiles` (ilike)
-- Excluye al usuario actual y muestra "Ya es miembro" si ya pertenece al proyecto
-- Bloquea el INSERT si el usuario ya es miembro (doble check: en UI y antes del DB call)
-- Maneja race condition con código de error `23505` (unique constraint)
+- Autocompletado en tiempo real sobre `profiles`.
+- Bloquea duplicados e inserta registros en `project_members` con `role = 'member'` e inserta notificación en `user_notifications`.
 
 ---
 
 ## 9. CSS y Diseño
 
-- **Un solo fichero:** `src/styles/global.css` (~3500+ líneas)
+- **Un solo fichero:** `src/styles/global.css` (~3700+ líneas)
 - **Temática:** Dark mode exclusivo, inspirado en herramientas de comando
 - **Variables CSS clave:**
   - `--bg-primary`, `--bg-secondary`, `--bg-panel`, `--bg-card`, `--bg-input`
@@ -362,6 +387,10 @@ Las invitaciones **no son una tabla separada**; se detectan desde `project_membe
   - `--radius`, `--radius-sm`, `--radius-md`, `--radius-lg`
   - `--font-mono` (JetBrains Mono)
   - `--transition`, `--ease-out`
+- **Componentes específicos añadidos:**
+  - `.header-role-badge` y sus variantes `--owner`, `--admin`, `--member`, `--guest`.
+  - `.notif-wrapper`, `.notif-bell-btn`, `.notif-badge`, `.notif-dropdown`, `.notif-item`.
+  - `.manage-members-list`, `.manage-member-row`, `.role-select`, `.btn-kick-member`.
 - **Mobile:** `@media (max-width: 768px)` al final del fichero. El Kanban se convierte en carrusel horizontal swipeable. Nunca tocar estilos desktop al hacer cambios mobile.
 - **Clases de badges:**
   - Primary: `.badge-primary--hw` / `.badge-primary--sw`
