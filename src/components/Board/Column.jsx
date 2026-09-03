@@ -80,8 +80,10 @@ export default function Column({
             key={card.id}
             card={card}
             isDragging={draggingId === card.id}
+            commentCount={card.commentCount ?? 0}
+            hasUnviewedComments={card.hasUnviewedComments ?? false}
             onEdit={() => onEditCard(card)}
-            onDelete={() => onDeleteCard(card.id)}
+            onDelete={() => onDeleteCard(card)}
             onDragStart={() => onDragStart(card.id)}
             onDragEnd={onDragEnd}
           />

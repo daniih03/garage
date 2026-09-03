@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
+import { setStoredProviderToken, clearStoredProviderToken } from './lib/github'
 import LoginPage from './components/Auth/LoginPage'
 import Header from './components/Layout/Header'
 import HomePage from './components/Home/HomePage'
@@ -13,15 +14,73 @@ export default function App() {
   const [activeMilestone, setActiveMilestone] = useState(null)
 
   useEffect(() => {
+    // 1. Auto-logout on new deploy
+    const currentBuild = typeof __GARAGE_BUILD_TIME__ !== 'undefined' ? __GARAGE_BUILD_TIME__ : null
+    if (currentBuild) {
+      const storedBuild = localStorage.getItem('garage_last_build_time')
+      if (storedBuild && storedBuild !== currentBuild) {
+        console.log('[Deploy] New version detected, auto-logging out...')
+        localStorage.setItem('garage_last_build_time', currentBuild)
+        clearStoredProviderToken()
+        supabase.auth.signOut().then(() => {
+          if (window.location.hash) {
+            window.history.replaceState(null, '', window.location.pathname)
+          }
+          setSession(null)
+          setLoading(false)
+        })
+        return
+      }
+      localStorage.setItem('garage_last_build_time', currentBuild)
+    }
+
+    // 2. Load session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.provider_token) {
+        setStoredProviderToken(session.provider_token)
+      }
       setSession(session)
       setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => setSession(session)
+      (_event, session) => {
+        if (session?.provider_token) {
+          setStoredProviderToken(session.provider_token)
+        }
+        setSession(session)
+      }
     )
-    return () => subscription.unsubscribe()
+
+    // 3. Check for new deployments on tab focus & interval
+    async function checkServerDeploy() {
+      try {
+        const res = await fetch(`${import.meta.env.BASE_URL}build-meta.json?t=${Date.now()}`, {
+          cache: 'no-store',
+        })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.buildTime && currentBuild && data.buildTime !== currentBuild) {
+            console.log('[Deploy] Newer build deployed on server, auto-logging out...')
+            localStorage.setItem('garage_last_build_time', data.buildTime)
+            clearStoredProviderToken()
+            await supabase.auth.signOut()
+            window.location.reload()
+          }
+        }
+      } catch {
+        // Ignore offline / network errors
+      }
+    }
+
+    window.addEventListener('focus', checkServerDeploy)
+    const interval = setInterval(checkServerDeploy, 60000)
+
+    return () => {
+      subscription.unsubscribe()
+      window.removeEventListener('focus', checkServerDeploy)
+      clearInterval(interval)
+    }
   }, [])
 
   function openProject(project) {
@@ -63,6 +122,8 @@ export default function App() {
             project={activeProject}
             activeMilestone={activeMilestone}
             onMilestoneChange={setActiveMilestone}
+            onProjectUpdate={setActiveProject}
+            onDeleteProject={goHome}
           />
         )}
       </main>
