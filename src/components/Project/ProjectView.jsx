@@ -102,7 +102,15 @@ export default function ProjectView({
       .channel(`members-${project.id}`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'project_members', filter: `project_id=eq.${project.id}` },
-        () => fetchMembers()
+        (payload) => {
+          supabase.auth.getUser().then(({ data: { user } }) => {
+            if (payload.eventType === 'DELETE' && payload.old?.user_id === user?.id && project.created_by !== user?.id) {
+              onDeleteProject?.()
+              return
+            }
+            fetchMembers()
+          })
+        }
       )
       .subscribe()
 
@@ -169,6 +177,10 @@ export default function ProjectView({
           }
         } else if (roleByUser.has(sessionUser.id)) {
           currentRole = roleByUser.get(sessionUser.id) || 'member'
+        } else {
+          // El usuario ha sido expulsado o ya no pertenece al proyecto
+          onDeleteProject?.()
+          return
         }
       }
       setCurrentUserRole(currentRole)
@@ -245,9 +257,14 @@ export default function ProjectView({
     setMilestones(current => {
       switch (eventType) {
         case 'INSERT': {
-          const updated = [...current, next].sort((a, b) => a.number - b.number)
+          if (!next?.id) return current
+          const exists = current.some(m => m.id === next.id || (m.project_id === next.project_id && m.number === next.number))
+          const updated = exists
+            ? current.map(m => (m.id === next.id || (m.project_id === next.project_id && m.number === next.number)) ? next : m)
+            : [...current, next]
+          const sorted = updated.sort((a, b) => a.number - b.number)
           if (!activeMilestone) onMilestoneChange(next)
-          return updated
+          return sorted
         }
         case 'UPDATE': return current.map(m => m.id === next.id ? next : m)
         case 'DELETE': {
@@ -315,10 +332,12 @@ export default function ProjectView({
   }
 
   function handleMilestoneCreated(created) {
-    if (!created) return
+    if (!created?.id) return
     setMilestones(prev => {
-      const exists = prev.some(m => m.id === created.id)
-      const list = exists ? prev.map(m => m.id === created.id ? created : m) : [...prev, created]
+      const exists = prev.some(m => m.id === created.id || (m.project_id === created.project_id && m.number === created.number))
+      const list = exists
+        ? prev.map(m => (m.id === created.id || (m.project_id === created.project_id && m.number === created.number)) ? created : m)
+        : [...prev, created]
       return list.sort((a, b) => a.number - b.number)
     })
     if (!activeMilestone) {

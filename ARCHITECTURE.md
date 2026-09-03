@@ -355,6 +355,7 @@ Las invitaciones son **estrictamente manuales, explícitas y gobernadas al 100% 
 ### `ProjectView.jsx`
 - Carga miembros basándose **estrictamente en `project_members`** con sus roles correspondientes y detecta el rol del usuario actual (`currentUserRole`).
 - Si el usuario actual es el creador (`project.created_by`), auto-repara su membresía en `project_members` con rol `'owner'` si faltara en BD.
+- **Redirección automática por expulsión:** Si el usuario es expulsado por un administrador mientras tiene abierto el proyecto, el evento Realtime `DELETE` sobre `project_members` (y la verificación en `fetchMembers`) lo detecta de inmediato y lo redirige automáticamente a la vista de proyectos (`HomePage`) igual que cuando un usuario sale voluntariamente.
 - Barra de miembros con avatares, conteo de colaboradores y botón *"Administrar colaboradores"* (visible solo para `owner` y `admin`).
 - Expulsión directa desde avatar restringida por jerarquía RBAC.
 - Botón "Salir" del proyecto disponible para todos los miembros excepto el `owner`.
@@ -362,7 +363,7 @@ Las invitaciones son **estrictamente manuales, explícitas y gobernadas al 100% 
   - "Nuevo hito", "Invitar", "Editar", "Exportar CSV", "Importar CSV": solo `owner` y `admin`.
   - "Eliminar proyecto": exclusivo de `owner`.
 - Estado vacío (`milestones.length === 0`): muestra botón destacado "Crear primer hito" para roles con privilegios (`owner`, `admin`).
-- Conexión inmediata de hitos vía `handleMilestoneCreated` sin esperar a Realtime.
+- Conexión inmediata de hitos vía `handleMilestoneCreated` con **deduplicación estricta** frente al evento `INSERT` de Supabase Realtime, evitando duplicados visuales temporales.
 - Modales: Invitar, Administrar Miembros, Importar Proyecto (CSV), Editar Proyecto, Eliminar Proyecto, Expulsar Miembro, Salir del Proyecto, Crear Hito.
 
 ### `ManageMembersModal.jsx`
@@ -623,6 +624,7 @@ CREATE POLICY "Actualizar propio status de membresía" ON project_members
 | 31 | Sistema de Rangos de Usuario (Owner, Admin, Member, Guest), Campana de Notificaciones interactiva y Gestión de Colaboradores | `28c4863` |
 | 32 | Fix persistencia de miembros expulsados, bloqueo de exportar CSV a Member/Guest y ordenación jerárquica de roles en modal | `5d2fca2` |
 | 33 | Corrección de creación de hitos, eliminación de auto-invitaciones de GitHub, centralización de invitaciones en campana de cabecera con ciclo de vida gobernado por status en BD, borrado individual de notificaciones (botón ✕) y restricción de papelera de proyecto solo a Owner | `01f33c9` |
+| 34 | Redirección automática de usuarios expulsados a la vista de proyectos y deduplicación de hitos frente a eventos Realtime | `661358e` |
 
 ---
 
