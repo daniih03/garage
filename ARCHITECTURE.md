@@ -54,9 +54,10 @@ garage/
 │   ├── main.jsx                 # Entry point React
 │   ├── lib/
 │   │   ├── supabase.js          # Cliente Supabase singleton
-│   │   └── github.js            # Helpers: fetchUserRepos, fetchRepoCollaboratorsDetails, provider token storage
+│   │   ├── github.js            # Helpers: fetchUserRepos, fetchRepoCollaboratorsDetails, provider token storage
+│   │   └── csvExportImport.js   # Helpers: escapeCSV, parseCSV, generateProjectCSV, parseProjectCSV, downloadCSV
 │   ├── styles/
-│   │   └── global.css           # TODOS los estilos (~3400+ líneas, temática oscura)
+│   │   └── global.css           # TODOS los estilos (~3500+ líneas, temática oscura)
 │   └── components/
 │       ├── Auth/
 │       │   └── LoginPage.jsx    # Pantalla de login con GitHub OAuth
@@ -68,15 +69,16 @@ garage/
 │       │   ├── AddProjectModal.jsx    # Modal para añadir nuevo proyecto desde GitHub
 │       │   └── EditProjectModal.jsx   # Modal para editar proyecto existente
 │       ├── Project/
-│       │   ├── ProjectView.jsx  # Vista de proyecto: barra de miembros, hitos, tablero Kanban
+│       │   ├── ProjectView.jsx  # Vista de proyecto: barra de miembros, hitos, export/import CSV, tablero Kanban
 │       │   ├── MilestoneBar.jsx # Barra de selección de hitos con progreso
 │       │   ├── MilestoneModal.jsx     # Modal crear/editar hito
-│       │   └── InviteModal.jsx  # Modal invitar colaborador con autocompletado en tiempo real
+│       │   ├── InviteModal.jsx  # Modal invitar colaborador con autocompletado en tiempo real
+│       │   └── ImportProjectModal.jsx # Modal importar hitos y tarjetas desde CSV
 │       ├── Board/
-│       │   ├── Board.jsx        # Tablero Kanban: columnas, filtros, drag & drop, realtime
+│       │   ├── Board.jsx        # Tablero Kanban: columnas, filtros visuales, botón nueva tarjeta, drag & drop, realtime
 │       │   ├── Column.jsx       # Columna del Kanban (To do / Doing / Blocked / Done)
-│       │   ├── Card.jsx         # Tarjeta individual con badges, menciones @, indicador de comentarios
-│       │   └── CardModal.jsx    # Modal crear/editar tarjeta con menciones, comparativa paralela, comentarios
+│       │   ├── Card.jsx         # Tarjeta individual con badges, menciones @, indicador comentarios, fecha creación
+│       │   └── CardModal.jsx    # Modal crear/editar tarjeta con menciones, estado obligatorio, comparativa paralela, comentarios
 │       ├── Common/
 │       │   ├── ConfirmModal.jsx      # Modal de confirmación genérico simple
 │       │   └── DangerConfirmModal.jsx # Modal de confirmación peligrosa (requiere escribir CONFIRM)
@@ -228,13 +230,14 @@ Las invitaciones **no son una tabla separada**; se detectan desde `project_membe
 - La columna `doing` acepta tanto `doing` como `inprogress` (alias legacy)
 - Las tarjetas se ordenan por prioridad: `critical > high > mid > low`
 
-### Prevención de Tarjetas Duplicadas
-- `handleRealtimeChange` en `Board.jsx` guarda en INSERT solo si `!current.some(c => c.id === next.id)`
-- `fetchCards()` deduplica por `id` con un `Set` antes de `setCards()`
+### Ordenación de Tarjetas en Tablero
+- Prioridad principal: `critical > high > mid > low`
+- **Desempate por tags idénticos:** Si dos tarjetas coinciden en todos sus tags (`priority`, `primary_type` y `secondary_type`), se ordena de forma cronológica por antigüedad de creación (`created_at` más antiguo primero, arriba)
+- En caso contrario, se preserva el orden por posición manual (`position`)
 
-### Auto-logout en Deploy
-- `App.jsx` compara el `__GARAGE_BUILD_TIME__` del bundle con `localStorage.garage_last_build_time`
-- Si detecta nueva versión (o nueva versión en `public/build-meta.json` al refocusar la ventana), cierra sesión automáticamente
+### Exportación e Importación de Proyectos (CSV)
+- **Exportar:** Botón en `ProjectView.jsx` que genera un archivo `.csv` (RFC 4180 con BOM UTF-8 `\uFEFF` para Excel) incluyendo metadatos del proyecto y todas sus tarjetas e hitos con estados, tags, posiciones y fechas de creación.
+- **Importar:** Lee el archivo `.csv`, muestra una vista previa con el conteo de hitos/tarjetas y los inserta correlativamente en Supabase (respetando la numeración secuencial y calculando IDs).
 
 ---
 
@@ -255,17 +258,21 @@ Las invitaciones **no son una tabla separada**; se detectan desde `project_membe
 - Barra de miembros: avatares con botón de expulsión (✕ visible al hover, solo para el dueño), indicador propio (borde azul), contador
 - Botón "Salir" del proyecto (solo para no-dueños)
 - Gestión de hitos: CRUD completo con renumeración secuencial
-- Modales: Invitar, Editar Proyecto, Eliminar Proyecto, Expulsar Miembro, Salir del Proyecto
+- Exportación del proyecto completo a archivo `.csv` (con metadatos, hitos y tarjetas)
+- Modales: Invitar, Importar Proyecto (CSV), Editar Proyecto, Eliminar Proyecto, Expulsar Miembro, Salir del Proyecto
 
 ### `Board.jsx`
 - Estado: `cards`, `allProjectCards`, `commentsMeta`, `viewedMap`, `currentUser`, filtros
-- Filtros: primary (single select), secondary (multi), priority (multi) — con visual pills
+- Barra de filtros: primary (single select), secondary (multi), priority (multi) — con visual pills
+- Botón genérico "Nueva tarjeta" que abre el modal con estado vacío
+- Ordenación con desempate por antigüedad ante tarjetas con tags coincidentes
 - `fetchCards()`: recupera tarjetas + comentarios meta con `activeUser` obtenido síncronamente
 - `handleRealtimeChange()`: INSERT deduplicado, UPDATE, DELETE
 - Pasa `onCardViewed` a `CardModal` para actualizar el mapa de visualización
 
 ### `CardModal.jsx`
 - Formulario completo de creación/edición de tarjeta
+- Campo Estado desmarcado por defecto en creación y validado como obligatorio
 - Sistema de menciones `@` con dropdown contextual
 - Vista de comparativa paralela (modal se ensancha con CSS `modal--parallel`)
 - Switcher de tarjetas referenciadas: botones clickables por `@DISPLAY_ID`
@@ -275,6 +282,7 @@ Las invitaciones **no son una tabla separada**; se detectan desde `project_membe
 ### `Card.jsx`
 - Tarjeta Kanban con drag & drop nativo
 - Badges: `primary_type` | `secondary_type` | `priority` | comentario (rojo relleno = sin leer, contorno = leído)
+- Fecha de creación mostrada en el pie de la tarjeta con formato localizado y tooltip
 - `renderTextWithMentions()`: resalta `@DISPLAY_ID` con `.card-mention-badge`
 
 ### `InviteModal.jsx`
@@ -390,7 +398,7 @@ CREATE POLICY "Salir o expulsar miembros" ON project_members
 | 27 | Botón genérico Nueva tarjeta en barra de filtros y eliminación de '+' en columnas | `84482c4` |
 | 28 | Campo Estado desmarcado por defecto en creación y obligatorio para guardar | `5bf733e` |
 | 29 | Fecha de creación en tarjeta y ordenación por antigüedad cuando coinciden tags | `287eeb1` |
-| 30 | Exportar e Importar proyecto completo en formato .csv con hitos y tarjetas | Pendiente |
+| 30 | Exportar e Importar proyecto completo en formato .csv con hitos y tarjetas | `b5a9fdd` |
 
 ---
 
