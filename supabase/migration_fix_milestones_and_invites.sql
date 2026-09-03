@@ -100,3 +100,17 @@ CREATE POLICY "Solo miembros — projects" ON projects
   )
   WITH CHECK (auth.role() = 'authenticated');
 
+-- 7. Añadir columna status a project_members ('active' por defecto para miembros actuales)
+ALTER TABLE project_members 
+  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active'
+  CHECK (status IN ('pending', 'active'));
+
+UPDATE project_members SET status = 'active' WHERE status IS NULL;
+
+-- 8. Permitir a los usuarios actualizar su propio status en project_members (para aceptar invitaciones)
+DROP POLICY IF EXISTS "Actualizar propio status de membresía" ON project_members;
+CREATE POLICY "Actualizar propio status de membresía" ON project_members
+  FOR UPDATE USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid() AND role != 'owner');
+
+

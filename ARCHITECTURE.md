@@ -145,6 +145,7 @@ Creada automáticamente al hacer login via trigger `on_auth_user_created`.
 | `added_by` | uuid | FK → `auth.users.id` (quién invitó) |
 | `added_at` | timestamptz | Fecha de incorporación |
 | `role` | text | `'owner'`, `'admin'`, `'member'`, `'guest'` (default: `'member'`) |
+| `status` | text | `'active'`, `'pending'` (default: `'active'`) |
 
 **RLS:**
 - `SELECT`: Solo ver tu propio row (`user_id = auth.uid()`)
@@ -264,21 +265,21 @@ Formato: `ACRONIMO-MS-NNN`
 ### Sistema de Notificaciones Globales y Campana
 - **Campana de notificaciones (`NotificationBell.jsx`):** Situada a la izquierda del badge de rol en la cabecera. Muestra un badge numérico rojo animado si existen notificaciones no leídas (`read = false`).
 - Al hacer clic en la campana, se despliega una lista interactiva con soporte en tiempo real (`postgres_changes` en `user_notifications`).
+- **Botón de borrado individual (`✕`):** Cada notificación cuenta con un botón en la esquina superior derecha para eliminarla de forma definitiva de la base de datos (`DELETE FROM user_notifications`) y del estado local.
 - **Tipos de notificación:**
   - `project_invite`: Notificación al ser invitado a un proyecto. Permite aceptar o rechazar directamente desde el dropdown.
   - `role_change`: Notificación cuando un Admin u Owner asciende o degrada el rol de un usuario.
   - `project_kick`: Notificación cuando un usuario es expulsado de un proyecto (visible inmediatamente desde su panel principal).
 - Al marcar como leídas (individualmente o con "Marcar todas como leídas"), el badge numérico y el color rojo desaparecen.
 
-### Sistema de Invitaciones de Proyecto
-Las invitaciones son **estrictamente manuales y explícitas**:
-- Ya no se auto-invita a colaboradores de GitHub al registrar un proyecto nuevo ni mediante auto-sync de repositorios.
-- Para invitar a un usuario, un `owner` o `admin` debe hacerlo expresamente desde el modal de invitación (`InviteModal.jsx`).
-- Al invitar, se inserta la membresía en `project_members` (rol `'member'`) y una notificación `project_invite` en `user_notifications`.
-- **Campana de notificaciones como único canal:** La invitación aparece y se gestiona **exclusivamente en la campana de notificaciones de la cabecera (`NotificationBell.jsx`)**, donde el usuario puede Aceptar o Rechazar. Se eliminó cualquier banner o cuadro central en `HomePage`.
-- **Aceptar:** El invitado pulsa "Aceptar" en la campana. La notificación se marca como leída y el proyecto pasa a mostrarse inmediatamente en su grid de proyectos activos de `HomePage`.
-- **Rechazar:** El invitado pulsa "Rechazar" en la campana. Se elimina su fila de `project_members` y se marca la notificación como leída.
-- En `HomePage.jsx`, los proyectos con invitaciones pendientes no aceptadas permanecen ocultos del grid principal.
+### Sistema de Invitaciones de Proyecto (Ciclo de vida en BD)
+Las invitaciones son **estrictamente manuales, explícitas y gobernadas al 100% por la base de datos**:
+- **Cero dependencias de `localStorage`:** Se eliminó cualquier array o caché local (`garage_accepted_invites`, `garage_declined_invites`), resolviendo estados fantasmas al ser re-invitado o tras abandonar un proyecto.
+- **Invitación:** Un `owner` o `admin` invita desde `InviteModal.jsx`. Se inserta en `project_members` con `role = 'member'` y `status = 'pending'`, además de generar la notificación en `user_notifications`.
+- **Visualización en `HomePage`:** `HomePage.jsx` solo muestra en el grid proyectos donde el usuario es el creador (`created_by`) o donde su membresía tiene `status = 'active'`. Si el usuario tiene una invitación pendiente (`status = 'pending'`), el proyecto **no** se muestra en su grid hasta que acepte.
+- **Aceptar invitación:** En `NotificationBell.jsx`, el usuario pulsa "Aceptar". Esto actualiza en la base de datos `status = 'active'` en `project_members`, marca la notificación como leída y refresca `HomePage` para que el proyecto aparezca al instante.
+- **Rechazar invitación:** En `NotificationBell.jsx`, el usuario pulsa "Rechazar". Se elimina físicamente la fila en `project_members`, se elimina la notificación y el usuario permanece sin acceso al proyecto tal como estaba.
+- **Salida / Expulsión:** Si un usuario abandona el proyecto o es expulsado por un superior, su fila en `project_members` se elimina por completo. Si posteriormente es invitado de nuevo, se le crea una nueva membresía en `status = 'pending'`, requiriendo nuevamente que acepte desde la campana.
 
 ### Permisos de Eliminación en Tarjetas de Proyecto (`ProjectCard`)
 - En el visualizador principal (`HomePage.jsx`), el icono de la papelera para eliminar un proyecto solo se renderiza si el usuario actual es el `owner` del proyecto (`project.created_by === currentUser.id` o rol `owner`). Los colaboradores (`admin`, `member`, `guest`) no ven el botón de papelera.
@@ -567,6 +568,19 @@ CREATE POLICY "Solo miembros — projects" ON projects
     )
   )
   WITH CHECK (auth.role() = 'authenticated');
+
+-- 7. Añadir columna status a project_members ('active' por defecto para miembros actuales)
+ALTER TABLE project_members 
+  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active'
+  CHECK (status IN ('pending', 'active'));
+
+UPDATE project_members SET status = 'active' WHERE status IS NULL;
+
+-- 8. Permitir a los usuarios actualizar su propio status en project_members (para aceptar invitaciones)
+DROP POLICY IF EXISTS "Actualizar propio status de membresía" ON project_members;
+CREATE POLICY "Actualizar propio status de membresía" ON project_members
+  FOR UPDATE USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid() AND role != 'owner');
 ```
 
 ---
@@ -608,7 +622,7 @@ CREATE POLICY "Solo miembros — projects" ON projects
 | 30 | Exportar e Importar proyecto completo en formato .csv con hitos y tarjetas | `b5a9fdd` |
 | 31 | Sistema de Rangos de Usuario (Owner, Admin, Member, Guest), Campana de Notificaciones interactiva y Gestión de Colaboradores | `28c4863` |
 | 32 | Fix persistencia de miembros expulsados, bloqueo de exportar CSV a Member/Guest y ordenación jerárquica de roles en modal | `5d2fca2` |
-| 33 | Corrección de creación de hitos, eliminación de auto-invitaciones de GitHub, centralización de invitaciones en campana de cabecera y restricción de papelera de proyecto solo a Owner | `3a4676c` |
+| 33 | Corrección de creación de hitos, eliminación de auto-invitaciones de GitHub, centralización de invitaciones en campana de cabecera con ciclo de vida gobernado por status en BD, borrado individual de notificaciones (botón ✕) y restricción de papelera de proyecto solo a Owner | `01f33c9` |
 
 ---
 

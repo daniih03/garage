@@ -138,14 +138,17 @@ export default function ProjectView({
       const sessionUser = session?.user || null
       if (sessionUser && !currentUser) setCurrentUser(sessionUser)
 
-      // 1. Fetch Supabase project_members (con role)
+      // 1. Fetch Supabase project_members (con role y status)
       const { data: memberships } = await supabase
         .from('project_members')
-        .select('user_id, role')
+        .select('user_id, role, status')
         .eq('project_id', project.id)
 
+      // Solo miembros activos (los que tienen status active o sin status legacy)
+      const activeMemberships = (memberships ?? []).filter(m => m.status === 'active' || (!m.status && m.user_id))
+
       const roleByUser = new Map()
-      for (const m of memberships ?? []) {
+      for (const m of activeMemberships) {
         roleByUser.set(m.user_id, m.role || 'member')
       }
 
@@ -154,13 +157,14 @@ export default function ProjectView({
       if (sessionUser) {
         if (project.created_by === sessionUser.id) {
           currentRole = 'owner'
-          // Si el creador no estaba en project_members en BD, asegurar su inserción como owner
+          // Si el creador no estaba en project_members en BD, asegurar su inserción como owner activo
           if (!roleByUser.has(sessionUser.id)) {
             supabase.from('project_members').upsert({
               project_id: project.id,
               user_id: sessionUser.id,
               added_by: sessionUser.id,
               role: 'owner',
+              status: 'active',
             }, { onConflict: 'project_id, user_id' }).then(() => {})
           }
         } else if (roleByUser.has(sessionUser.id)) {
@@ -172,7 +176,7 @@ export default function ProjectView({
 
       // 2. Fetch profiles SOLO para los usuarios que son miembros activos en project_members
       // (y asegurar que el creador/owner siempre esté incluido si falta)
-      const memberUserIds = new Set((memberships ?? []).map(m => m.user_id))
+      const memberUserIds = new Set(activeMemberships.map(m => m.user_id))
       if (project.created_by) memberUserIds.add(project.created_by)
 
       let dbProfiles = []

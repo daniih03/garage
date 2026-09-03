@@ -23,6 +23,13 @@ export default function HomePage({ onOpenProject }) {
         const username = session?.user?.user_metadata?.user_name
         let repoNames = []
 
+        if (session?.user?.id) {
+          try {
+            localStorage.removeItem(`garage_accepted_invites_${session.user.id}`)
+            localStorage.removeItem(`garage_declined_invites_${session.user.id}`)
+          } catch {}
+        }
+
         if (session?.provider_token) {
           try {
             const userRepos = await fetchUserRepos(session.provider_token)
@@ -80,17 +87,10 @@ export default function HomePage({ onOpenProject }) {
     }
     setCurrentUser(user)
 
-    let acceptedIds = new Set()
-    let declinedIds = new Set()
-    try {
-      acceptedIds = new Set(JSON.parse(localStorage.getItem(`garage_accepted_invites_${user.id}`) || '[]'))
-      declinedIds = new Set(JSON.parse(localStorage.getItem(`garage_declined_invites_${user.id}`) || '[]'))
-    } catch {}
-
-    // Fetch user memberships to know roles and who invited them
+    // Fetch user memberships to know roles and status
     const { data: memberships } = await supabase
       .from('project_members')
-      .select('project_id, added_by, added_at, role')
+      .select('project_id, added_by, added_at, role, status')
       .eq('user_id', user.id)
 
     const memberMap = new Map((memberships ?? []).map(m => [m.project_id, m]))
@@ -104,15 +104,13 @@ export default function HomePage({ onOpenProject }) {
       const activeList = []
 
       for (const proj of allProjects) {
-        if (declinedIds.has(proj.id)) continue
-
         const mem = memberMap.get(proj.id)
         const isCreator = proj.created_by === user.id
         const isOwner = isCreator || mem?.role === 'owner'
-        const wasInvitedByOther = mem?.added_by && mem.added_by !== user.id
+        const isActiveMember = mem && (mem.status === 'active' || (!mem.status && mem.user_id))
 
-        // Si fue invitado por otro y aún no ha aceptado desde la campana, no se muestra en el grid
-        if (wasInvitedByOther && !isCreator && !acceptedIds.has(proj.id)) {
+        // Si no es creador ni miembro activo (está pendiente de aceptar o no pertenece), no se muestra en el grid
+        if (!isCreator && !isActiveMember) {
           continue
         }
 

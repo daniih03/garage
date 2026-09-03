@@ -143,6 +143,7 @@ export default function AddProjectModal({ existingProjects, onClose }) {
         user_id:    user.id,
         added_by:   user.id,
         role:       'owner',
+        status:     'active',
       }, { onConflict: 'project_id, user_id' })
     }
 

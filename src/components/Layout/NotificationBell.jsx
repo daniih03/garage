@@ -63,20 +63,28 @@ export default function NotificationBell({ user, onOpenProject, onRefreshHome })
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
   }
 
+  async function handleDeleteNotification(e, notifId) {
+    e.stopPropagation()
+    setNotifications(prev => prev.filter(n => n.id !== notifId))
+    await supabase.from('user_notifications').delete().eq('id', notifId)
+  }
+
   async function handleAcceptInvite(notification) {
     if (!notification.project_id || !user) return
     setActionLoading(notification.id)
     try {
-      // Guardar en aceptadas localmente
-      const key = `garage_accepted_invites_${user.id}`
-      const accepted = JSON.parse(localStorage.getItem(key) || '[]')
-      if (!accepted.includes(notification.project_id)) {
-        accepted.push(notification.project_id)
-        localStorage.setItem(key, JSON.stringify(accepted))
-      }
+      // 1. Activar membresía en base de datos
+      await supabase
+        .from('project_members')
+        .update({ status: 'active' })
+        .eq('project_id', notification.project_id)
+        .eq('user_id', user.id)
 
+      // 2. Marcar notificación como leída
       await markNotificationRead(notification.id)
       setNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, read: true } : n))
+      
+      // 3. Notificar a HomePage para mostrar el proyecto inmediatamente
       onRefreshHome?.()
     } finally {
       setActionLoading(null)
@@ -87,22 +95,20 @@ export default function NotificationBell({ user, onOpenProject, onRefreshHome })
     if (!notification.project_id || !user) return
     setActionLoading(notification.id)
     try {
-      // Eliminar de project_members
+      // 1. Eliminar membresía pendiente de la base de datos
       await supabase
         .from('project_members')
         .delete()
         .eq('project_id', notification.project_id)
         .eq('user_id', user.id)
 
-      const key = `garage_declined_invites_${user.id}`
-      const declined = JSON.parse(localStorage.getItem(key) || '[]')
-      if (!declined.includes(notification.project_id)) {
-        declined.push(notification.project_id)
-        localStorage.setItem(key, JSON.stringify(declined))
-      }
+      // 2. Eliminar la notificación
+      await supabase
+        .from('user_notifications')
+        .delete()
+        .eq('id', notification.id)
 
-      await markNotificationRead(notification.id)
-      setNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, read: true } : n))
+      setNotifications(prev => prev.filter(n => n.id !== notification.id))
       onRefreshHome?.()
     } finally {
       setActionLoading(null)
@@ -188,7 +194,18 @@ export default function NotificationBell({ user, onOpenProject, onRefreshHome })
                     <div className="notif-item__content">
                       <div className="notif-item__top">
                         <span className="notif-item__title">{n.title}</span>
-                        <span className="notif-item__time">{formatTime(n.created_at)}</span>
+                        <div className="notif-item__top-right">
+                          <span className="notif-item__time">{formatTime(n.created_at)}</span>
+                          <button
+                            type="button"
+                            className="notif-item__delete-btn"
+                            onClick={e => handleDeleteNotification(e, n.id)}
+                            aria-label="Eliminar notificación"
+                            title="Eliminar notificación"
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
                       <p className="notif-item__msg">{n.message}</p>
 

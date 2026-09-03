@@ -127,21 +127,16 @@ export default function InviteModal({ project, currentMembers, onClose }) {
 
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
-    const { error: dbError } = await supabase.from('project_members').insert({
+    const { error: dbError } = await supabase.from('project_members').upsert({
       project_id: project.id,
       user_id:    found.id,
       added_by:   user?.id ?? null,
       role:       'member',
-    })
+      status:     'pending',
+    }, { onConflict: 'project_id, user_id' })
 
     if (dbError) {
-      // Handle unique-constraint violation (race condition: already a member)
-      if (dbError.code === '23505') {
-        setStatus('already')
-        setError('')
-      } else {
-        setError('No se pudo añadir el colaborador: ' + dbError.message)
-      }
+      setError('No se pudo añadir el colaborador: ' + dbError.message)
       setSaving(false)
       return
     }
