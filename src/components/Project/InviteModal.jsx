@@ -131,6 +131,7 @@ export default function InviteModal({ project, currentMembers, onClose }) {
       project_id: project.id,
       user_id:    found.id,
       added_by:   user?.id ?? null,
+      role:       'member',
     })
 
     if (dbError) {
@@ -139,11 +140,29 @@ export default function InviteModal({ project, currentMembers, onClose }) {
         setStatus('already')
         setError('')
       } else {
-        setError(dbError.message)
+        setError('No se pudo añadir el colaborador: ' + dbError.message)
       }
-    } else {
-      setStatus('added')
+      setSaving(false)
+      return
     }
+
+    // Crear notificación global para el usuario invitado
+    try {
+      await supabase.from('user_notifications').insert({
+        user_id: found.id,
+        project_id: project.id,
+        project_name: project.repo_name,
+        type: 'project_invite',
+        title: `Invitación a ${project.repo_name}`,
+        message: `@${user?.user_metadata?.user_name || 'Alguien'} te ha invitado a unirte al proyecto "${project.repo_name}".`,
+        metadata: { project_id: project.id, project_name: project.repo_name },
+        read: false,
+      })
+    } catch (e) {
+      console.warn('Could not insert invite notification', e)
+    }
+
+    setStatus('added')
     setSaving(false)
   }
 

@@ -1,7 +1,8 @@
 import { supabase } from '../../lib/supabase'
 import { clearStoredProviderToken } from '../../lib/github'
+import NotificationBell from './NotificationBell'
 
-export default function Header({ user, view, activeProject, onGoHome }) {
+export default function Header({ user, view, activeProject, userRole, onGoHome, onRefreshHome }) {
   async function handleLogout() {
     clearStoredProviderToken()
     await supabase.auth.signOut()
@@ -46,8 +47,24 @@ export default function Header({ user, view, activeProject, onGoHome }) {
         )}
       </div>
 
-      {/* Right side */}
+      {/* Right side: Campana de notificaciones, badge de rol y avatar de usuario */}
       <div className="header__right">
+        {/* 1. Campana de notificaciones */}
+        <NotificationBell
+          user={user}
+          onOpenProject={activeProject}
+          onRefreshHome={onRefreshHome}
+        />
+
+        {/* 2. Badge de rol en el proyecto activo (a la izquierda del avatar) */}
+        {view === 'project' && activeProject && userRole && (
+          <div className={`header-role-badge header-role-badge--${userRole.toLowerCase()}`} title={`Tu rol en este proyecto: ${userRole.toUpperCase()}`}>
+            <span className="header-role-badge__dot" aria-hidden="true" />
+            <span className="header-role-badge__label">{userRole.toUpperCase()}</span>
+          </div>
+        )}
+
+        {/* 3. Usuario */}
         <div className="header__user" aria-label={`Sesión: ${username}`}>
           {avatarUrl && (
             <img

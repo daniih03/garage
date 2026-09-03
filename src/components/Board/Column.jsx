@@ -4,6 +4,7 @@ export default function Column({
   column,
   cards,
   draggingId,
+  canMutate = true,
   onEditCard,
   onDeleteCard,
   onDrop,
@@ -12,12 +13,14 @@ export default function Column({
 }) {
   /* ── Drag-over visual feedback ── */
   function handleDragOver(e) {
+    if (!canMutate) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     e.currentTarget.classList.add('column--drag-over')
   }
 
   function handleDragLeave(e) {
+    if (!canMutate) return
     // Only remove class when leaving the column itself, not a child
     if (!e.currentTarget.contains(e.relatedTarget)) {
       e.currentTarget.classList.remove('column--drag-over')
@@ -25,6 +28,7 @@ export default function Column({
   }
 
   function handleDrop(e) {
+    if (!canMutate) return
     e.preventDefault()
     e.currentTarget.classList.remove('column--drag-over')
     if (draggingId) {
@@ -61,6 +65,7 @@ export default function Column({
           <Card
             key={card.id}
             card={card}
+            canMutate={canMutate}
             isDragging={draggingId === card.id}
             commentCount={card.commentCount ?? 0}
             hasUnviewedComments={card.hasUnviewedComments ?? false}

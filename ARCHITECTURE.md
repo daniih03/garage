@@ -66,37 +66,41 @@ garage/
 │   ├── lib/
 │   │   ├── supabase.js          # Cliente Supabase singleton
 │   │   ├── github.js            # Helpers: fetchUserRepos, fetchRepoCollaboratorsDetails, provider token storage
-│   │   └── csvExportImport.js   # Helpers: escapeCSV, parseCSV, generateProjectCSV, parseProjectCSV, downloadCSV
+│   │   ├── csvExportImport.js   # Helpers: escapeCSV, parseCSV, generateProjectCSV, parseProjectCSV, downloadCSV
+│   │   └── notifications.js     # Helpers: createUserNotification, markAllNotificationsRead, markNotificationRead
 │   ├── styles/
-│   │   └── global.css           # TODOS los estilos (~3500+ líneas, temática oscura)
+│   │   └── global.css           # TODOS los estilos (~3700+ líneas, temática oscura)
 │   └── components/
 │       ├── Auth/
 │       │   └── LoginPage.jsx    # Pantalla de login con GitHub OAuth
 │       ├── Layout/
-│       │   └── Header.jsx       # Cabecera global con logo y navegación
+│       │   ├── Header.jsx       # Cabecera global con logo, navegación, badge de rol y campana
+│       │   └── NotificationBell.jsx # Campana de notificaciones con badge no leídas y dropdown interactivo
 │       ├── Home/
 │       │   ├── HomePage.jsx     # Vista principal: lista de proyectos + notificaciones de invitación
 │       │   ├── ProjectCard.jsx  # Tarjeta de proyecto con progress ring y métricas
 │       │   ├── AddProjectModal.jsx    # Modal para añadir nuevo proyecto desde GitHub
 │       │   └── EditProjectModal.jsx   # Modal para editar proyecto existente
 │       ├── Project/
-│       │   ├── ProjectView.jsx  # Vista de proyecto: barra de miembros, hitos, export/import CSV, tablero Kanban
-│       │   ├── MilestoneBar.jsx # Barra de selección de hitos con progreso
+│       │   ├── ProjectView.jsx  # Vista de proyecto: barra de miembros, hitos, export/import CSV, RBAC, tablero Kanban
+│       │   ├── MilestoneBar.jsx # Barra de selección de hitos con progreso (restringida por rol)
 │       │   ├── MilestoneModal.jsx     # Modal crear/editar hito
-│       │   ├── InviteModal.jsx  # Modal invitar colaborador con autocompletado en tiempo real
+│       │   ├── InviteModal.jsx  # Modal invitar colaborador con autocompletado en tiempo real y notificación
+│       │   ├── ManageMembersModal.jsx # Modal para cambiar roles y expulsar según jerarquía
 │       │   └── ImportProjectModal.jsx # Modal importar hitos y tarjetas desde CSV
 │       ├── Board/
-│       │   ├── Board.jsx        # Tablero Kanban: columnas, filtros visuales, botón nueva tarjeta, drag & drop, realtime
-│       │   ├── Column.jsx       # Columna del Kanban (To do / Doing / Blocked / Done)
+│       │   ├── Board.jsx        # Tablero Kanban: columnas, filtros visuales, botón nueva tarjeta, drag & drop, RBAC
+│       │   ├── Column.jsx       # Columna del Kanban con control de arrastre según rol
 │       │   ├── Card.jsx         # Tarjeta individual con badges, menciones @, indicador comentarios, fecha creación
-│       │   └── CardModal.jsx    # Modal crear/editar tarjeta con menciones, estado obligatorio, comparativa paralela, comentarios
+│       │   └── CardModal.jsx    # Modal crear/editar tarjeta (modo solo lectura para Guest)
 │       ├── Common/
 │       │   ├── ConfirmModal.jsx      # Modal de confirmación genérico simple
 │       │   └── DangerConfirmModal.jsx # Modal de confirmación peligrosa (requiere escribir CONFIRM)
 │       └── Shared/              # Componentes compartidos (actualmente vacío)
 ├── supabase/
 │   ├── schema.sql               # Schema completo de Supabase con tablas, RLS y funciones
-│   └── migration_add_leave_kick_policy.sql  # Migración: política DELETE en project_members
+│   ├── migration_add_leave_kick_policy.sql  # Migración: política DELETE en project_members
+│   └── migration_roles_and_notifications.sql # Migración: roles RBAC, user_notifications y RLS reforzado
 └── vite.config.js               # Config Vite con base: '/garage/'
 ```
 
@@ -139,13 +143,30 @@ Creada automáticamente al hacer login via trigger `on_auth_user_created`.
 | `user_id` | uuid PK | FK → `auth.users.id` |
 | `added_by` | uuid | FK → `auth.users.id` (quién invitó) |
 | `added_at` | timestamptz | Fecha de incorporación |
+| `role` | text | `'owner'`, `'admin'`, `'member'`, `'guest'` (default: `'member'`) |
 
 **RLS:**
 - `SELECT`: Solo ver tu propio row (`user_id = auth.uid()`)
-- `INSERT`: Solo si ya eres miembro del proyecto
-- `DELETE`: Si eres tú mismo (salir) O si eres el creador del proyecto (expulsar)
+- `INSERT`: Solo si eres Admin u Owner del proyecto
+- `UPDATE`: Owner puede cambiar roles de Admin, Member y Guest; Admin solo de Member y Guest. Anti-auto-bloqueo.
+- `DELETE`: Si eres tú mismo (salir, no aplica a Owner) O según jerarquía de roles (Owner puede expulsar a cualquiera; Admin a Member y Guest).
 
-> ⚠️ La política DELETE `"Salir o expulsar miembros"` se añadió como migración y debe ejecutarse en el SQL Editor de Supabase si no está aplicada.
+#### `user_notifications`
+Tabla global por usuario para invitaciones, cambios de rango y expulsiones.
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | uuid PK | Identificador único |
+| `user_id` | uuid | FK → `auth.users.id` (destinatario) |
+| `project_id` | uuid | FK → `projects.id` (opcional si el proyecto fue borrado) |
+| `project_name` | text | Nombre legible del proyecto |
+| `type` | text | `'project_invite'`, `'role_change'`, `'project_kick'` |
+| `title` | text | Título de la notificación |
+| `message` | text | Contenido descriptivo |
+| `metadata` | jsonb | Metadatos adicionales |
+| `read` | boolean | Estado de lectura (default: `false`) |
+| `created_at` | timestamptz | Fecha de creación |
+
+**RLS:** Cada usuario tiene control sobre sus propias notificaciones (`user_id = auth.uid()`), permitiendo inserciones de otros miembros del proyecto.
 
 #### `milestones`
 | Columna | Tipo | Descripción |
@@ -157,6 +178,7 @@ Creada automáticamente al hacer login via trigger `on_auth_user_created`.
 | `created_at` | timestamptz | |
 
 **UNIQUE:** `(project_id, number)`
+**RLS:** Mutaciones (`INSERT`, `UPDATE`, `DELETE`) restringidas a roles `'owner'` y `'admin'`.
 
 #### `cards`
 | Columna | Tipo | Descripción |
@@ -176,6 +198,7 @@ Creada automáticamente al hacer login via trigger `on_auth_user_created`.
 | `created_by` | uuid | FK → `auth.users.id` |
 
 **UNIQUE:** `(project_id, milestone_id, card_number)`
+**RLS:** Mutaciones (`INSERT`, `UPDATE`, `DELETE`) bloqueadas para rol `'guest'`. Permitidas para `'owner'`, `'admin'` y `'member'`.
 
 #### `card_comments`
 | Columna | Tipo | Descripción |
@@ -186,15 +209,19 @@ Creada automáticamente al hacer login via trigger `on_auth_user_created`.
 | `created_by` | uuid | FK → `auth.users.id` |
 | `created_at` | timestamptz | |
 
+**RLS:** Creación permitida para `'owner'`, `'admin'` y `'member'`. Bloqueada para `'guest'`.
+
 ### Funciones RPC Supabase
 
+- **`get_project_role(p_id uuid, u_id uuid)`**: Retorna el rol efectivo (`owner`, `admin`, `member`, `guest`) de un usuario en un proyecto.
 - **`sync_user_projects(user_repos text[], github_user text)`**: Sincroniza automáticamente al usuario con proyectos donde esté como colaborador GitHub. Se llama en cada carga de `HomePage`.
 - **`handle_new_user()`** (trigger): Crea el perfil automáticamente al registrarse.
-- **`auto_add_known_collaborators()`** (trigger): Al crear un proyecto, auto-añade al creador y a los colaboradores GitHub conocidos.
+- **`auto_add_known_collaborators()`** (trigger): Al crear un proyecto, auto-añade al creador con rol `owner` y a los colaboradores GitHub conocidos con rol `member`.
 
 ### Realtime
 Todos los canales suscritos usan `postgres_changes`:
 - `home-projects` → `projects` + `project_members`
+- `user-notifs-{userId}` → `user_notifications` (campana global en tiempo real)
 - `milestones-{projectId}` → `milestones`
 - `members-{projectId}` → `project_members`
 - `board-{projectId}-{milestoneId}` → `cards` + `card_comments`
@@ -218,6 +245,24 @@ Formato: `ACRONIMO-MS-NNN`
 - Al escribir un comentario → se llama `onCardViewed(card.id)` en `CardModal` para actualizar inmediatamente
 - `fetchCards()` en `Board.jsx` recupera el usuario con `supabase.auth.getUser()` de forma síncrona (evita race condition de estado `currentUser` aún no inicializado)
 - `commentsMeta[cardId]` contiene: `{ count, latestAt, latestOtherCommentAt }`
+
+### Sistema de Roles y Permisos (RBAC)
+- **Roles:**
+  - **`owner`**: Creador del proyecto (`created_by`). Solo existe 1 por proyecto. No se puede transferir ni ascender a nadie a Owner. Control total: edita/borra proyecto, gestiona hitos, gestiona tarjetas, invita y administra colaboradores (puede cambiar roles de Admin/Member/Guest y expulsar a cualquier miembro). No puede degradarse ni expulsarse a sí mismo.
+  - **`admin`**: Puede crear, editar o eliminar hitos y tarjetas. Puede invitar miembros. Puede administrar colaboradores con rol inferior (`member` y `guest`), cambiándoles el rol o expulsándolos. No puede degradar ni expulsar al Owner ni a otros Admins, ni degradarse a sí mismo. No puede eliminar el proyecto.
+  - **`member`**: Puede crear, editar, mover y borrar tarjetas. No puede gestionar hitos, ni invitar, ni administrar colaboradores, ni editar/borrar el proyecto.
+  - **`guest`**: Permisos de solo lectura (visualización). Puede ver el proyecto, hitos y tarjetas, abrir el modal en modo consulta y exportar a CSV. No puede crear, editar, mover ni borrar tarjetas ni hitos, ni añadir comentarios.
+- **Header:** A la izquierda del avatar de usuario se muestra el badge con el rol activo en el proyecto (`OWNER`, `ADMIN`, `MEMBER`, `GUEST`) con código de color distintivo.
+- **Salir del proyecto:** Cualquier colaborador (excepto el Owner) puede salirse voluntariamente del proyecto. Al salir, se elimina su registro de `project_members`.
+
+### Sistema de Notificaciones Globales y Campana
+- **Campana de notificaciones (`NotificationBell.jsx`):** Situada a la izquierda del badge de rol en la cabecera. Muestra un badge numérico rojo animado si existen notificaciones no leídas (`read = false`).
+- Al hacer clic en la campana, se despliega una lista interactiva con soporte en tiempo real (`postgres_changes` en `user_notifications`).
+- **Tipos de notificación:**
+  - `project_invite`: Notificación al ser invitado a un proyecto. Permite aceptar o rechazar directamente desde el dropdown.
+  - `role_change`: Notificación cuando un Admin u Owner asciende o degrada el rol de un usuario.
+  - `project_kick`: Notificación cuando un usuario es expulsado de un proyecto (visible inmediatamente desde su panel principal).
+- Al marcar como leídas (individualmente o con "Marcar todas como leídas"), el badge numérico y el color rojo desaparecen.
 
 ### Sistema de Invitaciones de Proyecto
 Las invitaciones **no son una tabla separada**; se detectan desde `project_members`:
@@ -410,6 +455,7 @@ CREATE POLICY "Salir o expulsar miembros" ON project_members
 | 28 | Campo Estado desmarcado por defecto en creación y obligatorio para guardar | `5bf733e` |
 | 29 | Fecha de creación en tarjeta y ordenación por antigüedad cuando coinciden tags | `287eeb1` |
 | 30 | Exportar e Importar proyecto completo en formato .csv con hitos y tarjetas | `b5a9fdd` |
+| 31 | Sistema de Rangos de Usuario (Owner, Admin, Member, Guest), Campana de Notificaciones interactiva y Gestión de Colaboradores | pendiente |
 
 ---
 

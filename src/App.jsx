@@ -12,6 +12,8 @@ export default function App() {
   const [view, setView]                     = useState('home')        // 'home' | 'project'
   const [activeProject, setActiveProject]   = useState(null)
   const [activeMilestone, setActiveMilestone] = useState(null)
+  const [activeUserRole,  setActiveUserRole]  = useState(null)
+  const [homeRefreshKey,  setHomeRefreshKey]  = useState(0)
 
   useEffect(() => {
     // 1. Auto-logout on new deploy
@@ -86,6 +88,7 @@ export default function App() {
   function openProject(project) {
     setActiveProject(project)
     setActiveMilestone(null)
+    setActiveUserRole(null)
     setView('project')
   }
 
@@ -93,6 +96,7 @@ export default function App() {
     setView('home')
     setActiveProject(null)
     setActiveMilestone(null)
+    setActiveUserRole(null)
   }
 
   if (loading) {
@@ -111,11 +115,16 @@ export default function App() {
         user={session.user}
         view={view}
         activeProject={activeProject}
+        userRole={activeUserRole}
         onGoHome={goHome}
+        onRefreshHome={() => setHomeRefreshKey(prev => prev + 1)}
       />
       <main className="main-content">
         {view === 'home' && (
-          <HomePage onOpenProject={openProject} />
+          <HomePage
+            key={homeRefreshKey}
+            onOpenProject={openProject}
+          />
         )}
         {view === 'project' && activeProject && (
           <ProjectView
@@ -124,6 +133,7 @@ export default function App() {
             onMilestoneChange={setActiveMilestone}
             onProjectUpdate={setActiveProject}
             onDeleteProject={goHome}
+            onRoleDetected={setActiveUserRole}
           />
         )}
       </main>

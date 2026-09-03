@@ -38,6 +38,7 @@ export default function CardModal({
   cardsInStatus,
   milestoneCards = [],
   allCards = [],
+  canMutate = true,
   onCardViewed,
   onDeleteCard,
   onClose,
@@ -760,7 +761,7 @@ export default function CardModal({
 
             {/* 3. Fixed Footer */}
             <div className="modal__footer">
-              {isEditing && (
+              {isEditing && canMutate && (
                 <button
                   type="button"
                   className="btn btn--ghost btn--sm"
@@ -781,10 +782,14 @@ export default function CardModal({
                   Eliminar tarjeta
                 </button>
               )}
-              <button type="button" className="btn btn--ghost" onClick={onClose}>Cancelar</button>
-              <button type="submit" className="btn btn--primary" disabled={saving}>
-                {saving ? 'Guardando…' : isEditing ? 'Actualizar' : 'Crear tarjeta'}
+              <button type="button" className="btn btn--ghost" onClick={onClose}>
+                {canMutate ? 'Cancelar' : 'Cerrar'}
               </button>
+              {canMutate && (
+                <button type="submit" className="btn btn--primary" disabled={saving}>
+                  {saving ? 'Guardando…' : isEditing ? 'Actualizar' : 'Crear tarjeta'}
+                </button>
+              )}
             </div>
           </form>
         </div>

@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { fetchRepoCollaboratorsDetails, getStoredProviderToken } from '../../lib/github'
 import { generateProjectCSV, downloadCSV } from '../../lib/csvExportImport'
+import { createUserNotification } from '../../lib/notifications'
 import MilestoneBar from './MilestoneBar'
 import InviteModal from './InviteModal'
+import ManageMembersModal from './ManageMembersModal'
 import ImportProjectModal from './ImportProjectModal'
 import EditProjectModal from '../Home/EditProjectModal'
 import DangerConfirmModal from '../Common/DangerConfirmModal'
@@ -15,14 +17,17 @@ export default function ProjectView({
   onMilestoneChange,
   onProjectUpdate,
   onDeleteProject,
+  onRoleDetected,
 }) {
   const [milestones,         setMilestones]         = useState([])
   const [members,            setMembers]            = useState([])
   const [currentUser,        setCurrentUser]        = useState(null)
+  const [currentUserRole,    setCurrentUserRole]    = useState(null)
   const [loading,            setLoading]            = useState(true)
   const [refreshing,         setRefreshing]         = useState(false)
   const [refreshKey,         setRefreshKey]         = useState(0)
   const [showInvite,         setShowInvite]         = useState(false)
+  const [showManageMembers,  setShowManageMembers]  = useState(false)
   const [showEditProject,    setShowEditProject]    = useState(false)
   const [showDeleteProject,  setShowDeleteProject]  = useState(false)
   const [memberToKick,       setMemberToKick]       = useState(null)
@@ -137,11 +142,28 @@ export default function ProjectView({
         ghCollabs = await fetchRepoCollaboratorsDetails(project.repo_full_name, token)
       }
 
-      // 2. Fetch Supabase project_members + profiles
+      // 2. Fetch Supabase project_members (con role) + profiles
       const { data: memberships } = await supabase
         .from('project_members')
-        .select('user_id')
+        .select('user_id, role')
         .eq('project_id', project.id)
+
+      const roleByUser = new Map()
+      for (const m of memberships ?? []) {
+        roleByUser.set(m.user_id, m.role || 'member')
+      }
+
+      // Determinar rol del usuario actual
+      let currentRole = 'guest'
+      if (sessionUser) {
+        if (project.created_by === sessionUser.id) {
+          currentRole = 'owner'
+        } else if (roleByUser.has(sessionUser.id)) {
+          currentRole = roleByUser.get(sessionUser.id) || 'member'
+        }
+      }
+      setCurrentUserRole(currentRole)
+      onRoleDetected?.(currentRole)
 
       let dbProfiles = []
       if (memberships?.length) {
@@ -160,11 +182,15 @@ export default function ProjectView({
       for (const p of dbProfiles) {
         if (p.github_username) {
           const uname = p.github_username.toLowerCase()
+          const isProjOwner = project.created_by === p.id
+          const userRole = isProjOwner ? 'owner' : (roleByUser.get(p.id) || 'member')
+
           map.set(uname, {
             user_id: p.id,
             username: p.github_username,
             github_username: p.github_username,
             avatar_url: p.avatar_url || `https://github.com/${p.github_username}.png?size=64`,
+            role: userRole,
           })
         }
       }
@@ -178,6 +204,7 @@ export default function ProjectView({
             username: c.username,
             github_username: c.username,
             avatar_url: c.avatar_url,
+            role: 'member',
           })
         }
       }
@@ -193,6 +220,7 @@ export default function ProjectView({
                 username: u,
                 github_username: u,
                 avatar_url: `https://github.com/${u}.png?size=64`,
+                role: 'member',
               })
             }
           }
@@ -209,6 +237,7 @@ export default function ProjectView({
             username: currentUserLogin,
             github_username: currentUserLogin,
             avatar_url: session.user.user_metadata?.avatar_url || `https://github.com/${currentUserLogin}.png?size=64`,
+            role: currentRole,
           })
         }
       }
@@ -318,6 +347,17 @@ export default function ProjectView({
     if (error) {
       setKickError('No se pudo expulsar al colaborador: ' + error.message)
     } else {
+      // Enviar notificación global al colaborador expulsado
+      await createUserNotification({
+        userId: memberToKick.user_id,
+        projectId: project.id,
+        projectName: project.repo_name,
+        type: 'project_kick',
+        title: `Expulsado de ${project.repo_name}`,
+        message: `Has sido expulsado del proyecto "${project.repo_name}". Ya no tienes acceso a sus hitos y tarjetas.`,
+        metadata: { project_name: project.repo_name },
+      })
+
       setMembers(prev => prev.filter(m => m.user_id !== memberToKick.user_id))
       setMemberToKick(null)
     }
@@ -349,8 +389,18 @@ export default function ProjectView({
           <div className="members-bar__avatars" aria-label="Colaboradores del proyecto">
             {members.map(m => {
               const isSelf = m.user_id && currentUser && m.user_id === currentUser.id
-              const isProjectOwner = project.created_by === currentUser?.id
-              const canKick = isProjectOwner && !isSelf && m.user_id
+              const isOwner = currentUserRole === 'owner'
+              const isAdmin = currentUserRole === 'admin'
+              const isTargetOwner = m.role === 'owner' || project.created_by === m.user_id
+              const isTargetAdmin = m.role === 'admin'
+
+              // Owner puede expulsar a cualquiera excepto a sí mismo
+              // Admin puede expulsar a member o guest (no a owner ni a otros admin)
+              const canKick =
+                !isTargetOwner &&
+                !isSelf &&
+                m.user_id &&
+                (isOwner || (isAdmin && !isTargetAdmin))
 
               return (
                 <div key={m.username} className="member-avatar-wrap" title={isSelf ? `@${m.username} (tú)` : `@${m.username}`}>
@@ -394,6 +444,26 @@ export default function ProjectView({
               {members.length} {members.length === 1 ? 'colaborador' : 'colaboradores'}
             </span>
           )}
+
+          {/* Botón Administrar colaboradores para Owner y Admin */}
+          {(currentUserRole === 'owner' || currentUserRole === 'admin') && (
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              style={{ marginLeft: 6, fontSize: 11.5, padding: '3px 8px', height: 26 }}
+              onClick={() => setShowManageMembers(true)}
+              title="Administrar colaboradores y cambiar roles"
+              aria-label="Administrar colaboradores"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              Administrar colaboradores
+            </button>
+          )}
         </div>
 
         <div className="members-bar__actions">
@@ -422,19 +492,23 @@ export default function ProjectView({
             </svg>
             {refreshing ? 'Refrescando...' : 'Refrescar'}
           </button>
-          <button
-            className="btn btn--ghost btn--sm"
-            onClick={() => setShowInvite(true)}
-            aria-label="Invitar colaborador"
-          >
-            <svg width="13" height="13" viewBox="0 0 15 15" fill="none" aria-hidden="true">
-              <path d="M7.5 2v11M2 7.5h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-            </svg>
-            Invitar
-          </button>
 
-          {/* Leave project — only non-owners can see this */}
-          {currentUser && project.created_by !== currentUser.id && (
+          {/* Invitar colaborador: Solo Owner y Admin */}
+          {(currentUserRole === 'owner' || currentUserRole === 'admin') && (
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => setShowInvite(true)}
+              aria-label="Invitar colaborador"
+            >
+              <svg width="13" height="13" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+                <path d="M7.5 2v11M2 7.5h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              </svg>
+              Invitar
+            </button>
+          )}
+
+          {/* Leave project — todos los roles excepto Owner pueden salir */}
+          {currentUser && currentUserRole !== 'owner' && (
             <button
               className="btn btn--ghost btn--sm"
               style={{ color: '#F59E0B', borderColor: 'rgba(245, 158, 11, 0.35)' }}
@@ -451,7 +525,7 @@ export default function ProjectView({
             </button>
           )}
 
-          {/* Exportar proyecto a CSV */}
+          {/* Exportar proyecto a CSV — disponible para todos los roles */}
           <button
             className="btn btn--ghost btn--sm"
             onClick={handleExportProject}
@@ -467,48 +541,57 @@ export default function ProjectView({
             {exporting ? 'Exportando...' : 'Exportar'}
           </button>
 
-          {/* Importar proyecto desde CSV */}
-          <button
-            className="btn btn--ghost btn--sm"
-            onClick={() => setShowImportModal(true)}
-            aria-label="Importar proyecto desde CSV"
-            title="Importar hitos y tarjetas desde un archivo .csv a este proyecto"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            Importar
-          </button>
+          {/* Importar proyecto desde CSV: Solo Owner y Admin */}
+          {(currentUserRole === 'owner' || currentUserRole === 'admin') && (
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => setShowImportModal(true)}
+              aria-label="Importar proyecto desde CSV"
+              title="Importar hitos y tarjetas desde un archivo .csv a este proyecto"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              Importar
+            </button>
+          )}
 
-          <button
-            className="btn btn--ghost btn--sm"
-            onClick={() => setShowEditProject(true)}
-            aria-label="Editar proyecto"
-            title="Editar proyecto"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-            </svg>
-            Editar
-          </button>
-          <button
-            className="btn btn--ghost btn--sm"
-            style={{ color: 'var(--danger)', borderColor: 'rgba(231,76,60,0.25)' }}
-            onClick={() => setShowDeleteProject(true)}
-            aria-label="Eliminar proyecto"
-            title="Eliminar proyecto"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-              <path d="M10 11v6M14 11v6" />
-              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-            </svg>
-            Eliminar proyecto
-          </button>
+          {/* Editar proyecto: Solo Owner y Admin */}
+          {(currentUserRole === 'owner' || currentUserRole === 'admin') && (
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => setShowEditProject(true)}
+              aria-label="Editar proyecto"
+              title="Editar proyecto"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              Editar
+            </button>
+          )}
+
+          {/* Eliminar proyecto: Exclusivo del Owner */}
+          {currentUserRole === 'owner' && (
+            <button
+              className="btn btn--ghost btn--sm"
+              style={{ color: 'var(--danger)', borderColor: 'rgba(231,76,60,0.25)' }}
+              onClick={() => setShowDeleteProject(true)}
+              aria-label="Eliminar proyecto"
+              title="Eliminar proyecto"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+              Eliminar proyecto
+            </button>
+          )}
         </div>
       </div>
 
@@ -516,6 +599,7 @@ export default function ProjectView({
         project={project}
         milestones={milestones}
         activeMilestone={activeMilestone}
+        currentUserRole={currentUserRole}
         onSelectMilestone={onMilestoneChange}
         onUpdateMilestone={handleUpdateMilestone}
         onDeleteMilestone={handleDeleteMilestone}
@@ -530,8 +614,27 @@ export default function ProjectView({
           </p>
         </div>
       ) : activeMilestone ? (
-        <Board project={project} milestone={activeMilestone} refreshKey={refreshKey} />
+        <Board
+          project={project}
+          milestone={activeMilestone}
+          currentUserRole={currentUserRole}
+          refreshKey={refreshKey}
+        />
       ) : null}
+
+      {showManageMembers && (
+        <ManageMembersModal
+          project={project}
+          members={members}
+          currentUser={currentUser}
+          currentUserRole={currentUserRole}
+          onMembersUpdated={async () => {
+            await fetchMembers()
+            setRefreshKey(prev => prev + 1)
+          }}
+          onClose={() => setShowManageMembers(false)}
+        />
+      )}
 
       {showInvite && (
         <InviteModal
