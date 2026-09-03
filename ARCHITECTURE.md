@@ -1,10 +1,21 @@
 # ARCHITECTURE.md — Garage App
 
-> **Propósito de este documento:** Proporcionar contexto completo del proyecto para que cualquier nueva sesión de desarrollo (Antigravity AI u otro desarrollador) pueda continuar el trabajo sin pérdida de contexto. **Actualizar este fichero en cada push significativo.**
+> **Propósito de este documento:** Proporcionar la única fuente de verdad y contexto completo del proyecto para que cualquier nueva sesión de desarrollo (Antigravity AI u otro desarrollador) pueda entender al 100% el estado exacto de la aplicación en ese momento y continuar el trabajo sin pérdida de contexto.
 
 ---
 
-## 1. Visión General del Proyecto
+## 1. Regla Mandatoria de Contexto y Actualización (CRÍTICA — Respetar en Cada Sesión)
+
+> 🧠 **Para el Asistente AI / Desarrollador:**
+> Al leer este documento al inicio de una conversación o sesión, debes asumir y comprender el estado completo del proyecto aquí descrito.
+> **Cada vez que se añada, modifique o elimine cualquier funcionalidad, componente, lógica de negocio, estilo o regla en la aplicación:**
+> 1. **Integrar al contexto global:** No limitarse a añadir una fila en la tabla de historial; se deben actualizar las secciones correspondientes de este documento (**Sección 4: Estructura de archivos**, **Sección 5: Base de datos**, **Sección 6: Lógica de negocio clave**, **Sección 7: Componentes y responsabilidades**, **Sección 8: CSS y diseño**).
+> 2. **Garantizar continuidad:** El documento debe quedar siempre redactado de modo que la siguiente sesión que lo lea entienda exactamente cómo funciona la aplicación tal cual está en ese instante, sin requerir inferencias ni revisar el historial de commits.
+> 3. **Actualizar antes del push:** Toda modificación del código debe ir acompañada de su respectiva actualización en `ARCHITECTURE.md` en el mismo commit o antes de solicitar el push.
+
+---
+
+## 2. Visión General del Proyecto
 
 **Garage** es una herramienta de gestión de proyectos estilo Kanban, orientada a equipos de desarrollo de hardware/software. Está construida como SPA (Single Page App) con React + Vite, backend en Supabase (PostgreSQL + Realtime + Auth) y desplegada en GitHub Pages.
 
@@ -16,7 +27,7 @@
 
 ---
 
-## 2. Regla de Push (CRÍTICA — Respetar Siempre)
+## 3. Regla de Push (CRÍTICA — Respetar Siempre)
 
 > El usuario **siempre** quiere ser consultado antes del push.  
 > **Nunca ejecutar `git push` sin preguntar primero y recibir confirmación explícita.**
@@ -28,7 +39,7 @@ Protocolo:
 
 ---
 
-## 3. Stack Técnico
+## 4. Stack Técnico
 
 | Capa | Tecnología |
 |---|---|
@@ -42,7 +53,7 @@ Protocolo:
 
 ---
 
-## 4. Estructura de Archivos
+## 5. Estructura de Archivos
 
 ```
 garage/
@@ -91,7 +102,7 @@ garage/
 
 ---
 
-## 5. Base de Datos Supabase
+## 6. Base de Datos Supabase
 
 ### Tablas
 
@@ -190,7 +201,7 @@ Todos los canales suscritos usan `postgres_changes`:
 
 ---
 
-## 6. Lógica de Negocio Clave
+## 7. Lógica de Negocio Clave
 
 ### IDs de Tarjetas
 Formato: `ACRONIMO-MS-NNN`
@@ -241,7 +252,7 @@ Las invitaciones **no son una tabla separada**; se detectan desde `project_membe
 
 ---
 
-## 7. Componentes Clave — Responsabilidades
+## 8. Componentes Clave — Responsabilidades
 
 ### `App.jsx`
 - Estado global: `session`, `view` (`'home'` | `'project'`), `activeProject`, `activeMilestone`
@@ -293,9 +304,9 @@ Las invitaciones **no son una tabla separada**; se detectan desde `project_membe
 
 ---
 
-## 8. CSS y Diseño
+## 9. CSS y Diseño
 
-- **Un solo fichero:** `src/styles/global.css` (~3400+ líneas)
+- **Un solo fichero:** `src/styles/global.css` (~3500+ líneas)
 - **Temática:** Dark mode exclusivo, inspirado en herramientas de comando
 - **Variables CSS clave:**
   - `--bg-primary`, `--bg-secondary`, `--bg-panel`, `--bg-card`, `--bg-input`
@@ -316,7 +327,7 @@ Las invitaciones **no son una tabla separada**; se detectan desde `project_membe
 
 ---
 
-## 9. Convenciones y Patrones
+## 10. Convenciones y Patrones
 
 - **Sin Router:** La navegación es por estado de React (`view` en `App.jsx`)
 - **Sin Redux / Zustand:** Estado local con `useState` y paso de props/callbacks
@@ -328,7 +339,7 @@ Las invitaciones **no son una tabla separada**; se detectan desde `project_membe
 
 ---
 
-## 10. Usuarios y Colaboradores Conocidos
+## 11. Usuarios y Colaboradores Conocidos
 
 | GitHub Username | Rol |
 |---|---|
@@ -342,7 +353,7 @@ Las invitaciones **no son una tabla separada**; se detectan desde `project_membe
 
 ---
 
-## 11. Migraciones Pendientes de Supabase
+## 12. Migraciones Pendientes de Supabase
 
 Las siguientes queries deben haberse ejecutado en el SQL Editor de Supabase (además del `schema.sql` base):
 
@@ -364,7 +375,7 @@ CREATE POLICY "Salir o expulsar miembros" ON project_members
 
 ---
 
-## 12. Funcionalidades Implementadas (Historial)
+## 13. Funcionalidades Implementadas (Historial)
 
 | Fase | Funcionalidad | Commit |
 |---|---|---|
@@ -402,14 +413,13 @@ CREATE POLICY "Salir o expulsar miembros" ON project_members
 
 ---
 
-## 13. Cómo Actualizar Este Documento
+## 14. Cómo Actualizar Este Documento
 
 Al terminar cualquier sesión de desarrollo con cambios significativos:
-1. Actualizar la sección **12** con las nuevas funcionalidades
-2. Actualizar la sección **5** si se añaden/modifican tablas o políticas RLS
-3. Actualizar la sección **7** si se añaden/modifican componentes
-4. Actualizar la sección **11** si hay nuevas migraciones de Supabase
-5. Hacer commit junto con el resto de cambios
+1. Actualizar la sección **13** con las nuevas funcionalidades y sus commits correspondientes
+2. Actualizar las secciones **5, 6, 7, 8 y 9** para reflejar fielmente la arquitectura actual de la aplicación
+3. Actualizar la sección **12** si hay nuevas migraciones de Supabase
+4. Hacer commit junto con el resto de cambios
 
 ```bash
 git add ARCHITECTURE.md
