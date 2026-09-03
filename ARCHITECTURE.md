@@ -489,7 +489,7 @@ CREATE POLICY "Salir o expulsar miembros" ON project_members
 | 29 | Fecha de creación en tarjeta y ordenación por antigüedad cuando coinciden tags | `287eeb1` |
 | 30 | Exportar e Importar proyecto completo en formato .csv con hitos y tarjetas | `b5a9fdd` |
 | 31 | Sistema de Rangos de Usuario (Owner, Admin, Member, Guest), Campana de Notificaciones interactiva y Gestión de Colaboradores | `28c4863` |
-| 32 | Fix persistencia de miembros expulsados, bloqueo de exportar CSV a Member/Guest y ordenación jerárquica de roles en modal | pendiente |
+| 32 | Fix persistencia de miembros expulsados, bloqueo de exportar CSV a Member/Guest y ordenación jerárquica de roles en modal | `5d2fca2` |
 
 ---
 
