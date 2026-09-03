@@ -103,6 +103,26 @@ export default function ManageMembersModal({
     }
   }
 
+  // Orden de importancia de roles: owner (1) -> admin (2) -> member (3) -> guest (4)
+  const ROLE_WEIGHTS = {
+    owner: 1,
+    admin: 2,
+    member: 3,
+    guest: 4,
+  }
+
+  const sortedMembers = [...members].sort((a, b) => {
+    const roleA = a.role || (project.created_by === a.user_id ? 'owner' : 'member')
+    const roleB = b.role || (project.created_by === b.user_id ? 'owner' : 'member')
+    const weightA = ROLE_WEIGHTS[roleA] || 99
+    const weightB = ROLE_WEIGHTS[roleB] || 99
+
+    if (weightA !== weightB) {
+      return weightA - weightB
+    }
+    return (a.username || '').localeCompare(b.username || '')
+  })
+
   return createPortal(
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal modal--md" role="dialog" aria-modal="true" aria-labelledby="manage-members-title">
@@ -134,7 +154,7 @@ export default function ManageMembersModal({
           </p>
 
           <div className="manage-members-list">
-            {members.map(m => {
+            {sortedMembers.map(m => {
               const isSelf = m.user_id && currentUser && m.user_id === currentUser.id
               const targetRole = m.role || (project.created_by === m.user_id ? 'owner' : 'member')
               const isTargetOwner = targetRole === 'owner' || project.created_by === m.user_id

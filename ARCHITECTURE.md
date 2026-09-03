@@ -246,14 +246,18 @@ Formato: `ACRONIMO-MS-NNN`
 - `fetchCards()` en `Board.jsx` recupera el usuario con `supabase.auth.getUser()` de forma síncrona (evita race condition de estado `currentUser` aún no inicializado)
 - `commentsMeta[cardId]` contiene: `{ count, latestAt, latestOtherCommentAt }`
 
-### Sistema de Roles y Permisos (RBAC)
+#### Sistema de Roles y Permisos (RBAC)
 - **Roles:**
-  - **`owner`**: Creador del proyecto (`created_by`). Solo existe 1 por proyecto. No se puede transferir ni ascender a nadie a Owner. Control total: edita/borra proyecto, gestiona hitos, gestiona tarjetas, invita y administra colaboradores (puede cambiar roles de Admin/Member/Guest y expulsar a cualquier miembro). No puede degradarse ni expulsarse a sí mismo.
-  - **`admin`**: Puede crear, editar o eliminar hitos y tarjetas. Puede invitar miembros. Puede administrar colaboradores con rol inferior (`member` y `guest`), cambiándoles el rol o expulsándolos. No puede degradar ni expulsar al Owner ni a otros Admins, ni degradarse a sí mismo. No puede eliminar el proyecto.
-  - **`member`**: Puede crear, editar, mover y borrar tarjetas. No puede gestionar hitos, ni invitar, ni administrar colaboradores, ni editar/borrar el proyecto.
-  - **`guest`**: Permisos de solo lectura (visualización). Puede ver el proyecto, hitos y tarjetas, abrir el modal en modo consulta y exportar a CSV. No puede crear, editar, mover ni borrar tarjetas ni hitos, ni añadir comentarios.
+  - **`owner`**: Creador del proyecto (`created_by`). Solo existe 1 por proyecto. No se puede transferir ni ascender a nadie a Owner. Control total: edita/borra proyecto, gestiona hitos, gestiona tarjetas, invita y administra colaboradores (puede cambiar roles de Admin/Member/Guest y expulsar a cualquier miembro). Puede exportar e importar a CSV. No puede degradarse ni expulsarse a sí mismo.
+  - **`admin`**: Puede crear, editar o eliminar hitos y tarjetas. Puede invitar miembros. Puede administrar colaboradores con rol inferior (`member` y `guest`), cambiándoles el rol o expulsándolos. Puede exportar e importar a CSV. No puede degradar ni expulsar al Owner ni a otros Admins, ni degradarse a sí mismo. No puede eliminar el proyecto.
+  - **`member`**: Puede crear, editar, mover y borrar tarjetas. No puede gestionar hitos, ni invitar, ni administrar colaboradores, ni exportar el proyecto a CSV, ni editar/borrar el proyecto.
+  - **`guest`**: Permisos de solo lectura (visualización). Puede ver el proyecto, hitos y tarjetas y abrir el modal en modo consulta. No puede crear, editar, mover ni borrar tarjetas ni hitos, ni añadir comentarios, ni exportar a CSV.
 - **Header:** A la izquierda del avatar de usuario se muestra el badge con el rol activo en el proyecto (`OWNER`, `ADMIN`, `MEMBER`, `GUEST`) con código de color distintivo.
-- **Salir del proyecto:** Cualquier colaborador (excepto el Owner) puede salirse voluntariamente del proyecto. Al salir, se elimina su registro de `project_members`.
+- **Salir del proyecto y expulsiones (Fuente de verdad única):**
+  - Cualquier colaborador (excepto el Owner) puede salirse voluntariamente del proyecto. Al salir o ser expulsado, se elimina físicamente su registro de `project_members`.
+  - La lista de colaboradores en el proyecto y en el modal de administración se basa **exclusivamente en los miembros reales presentes en `project_members`** (enriquecidos opcionalmente con avatares de GitHub). Esto garantiza que un usuario expulsado o que haya abandonado el proyecto desaparezca de inmediato y no reaparezca erróneamente.
+- **Panel de Administrar Colaboradores (Ordenación jerárquica):**
+  - Los miembros en el modal de colaboradores se presentan ordenados estrictamente de arriba a abajo según la importancia de su rol: **Owner → Admin → Member → Guest** (y alfabéticamente ante el mismo rol).
 
 ### Sistema de Notificaciones Globales y Campana
 - **Campana de notificaciones (`NotificationBell.jsx`):** Situada a la izquierda del badge de rol en la cabecera. Muestra un badge numérico rojo animado si existen notificaciones no leídas (`read = false`).
@@ -326,19 +330,19 @@ Las invitaciones **no son una tabla separada**; se detectan desde `project_membe
 - Realtime en `projects` y `project_members`
 
 ### `ProjectView.jsx`
-- Carga miembros con roles (`select('user_id, role')`) y detecta el rol del usuario actual (`currentUserRole`).
+- Carga miembros basándose **estrictamente en `project_members`** con sus roles correspondientes y detecta el rol del usuario actual (`currentUserRole`).
 - Barra de miembros con avatares, conteo de colaboradores y botón *"Administrar colaboradores"* (visible solo para `owner` y `admin`).
 - Expulsión directa desde avatar restringida por jerarquía RBAC.
 - Botón "Salir" del proyecto disponible para todos los miembros excepto el `owner`.
 - Botones de acción del proyecto condicionados por rol:
-  - "Nuevo hito", "Invitar", "Editar", "Importar CSV": solo `owner` y `admin`.
+  - "Nuevo hito", "Invitar", "Editar", "Exportar CSV", "Importar CSV": solo `owner` y `admin`.
   - "Eliminar proyecto": exclusivo de `owner`.
-  - "Exportar CSV": disponible para todos los roles.
 - Modales: Invitar, Administrar Miembros, Importar Proyecto (CSV), Editar Proyecto, Eliminar Proyecto, Expulsar Miembro, Salir del Proyecto.
 
 ### `ManageMembersModal.jsx`
 - Administración integral de colaboradores y roles:
-  - Listado de colaboradores con badges de rol y distinción de usuario propio ("Tú").
+  - Listado de colaboradores **ordenado de arriba a abajo por jerarquía de roles (Owner → Admin → Member → Guest)**.
+  - Distinción de usuario propio ("Tú") y badges visuales.
   - Dropdown para cambiar rol respetando la jerarquía estricta: `owner` puede asignar `admin`, `member` y `guest`; `admin` solo puede asignar `member` y `guest`.
   - Regla contra el auto-bloqueo: ningún usuario puede cambiarse el rol a sí mismo ni el `owner` puede ser modificado.
   - Botón "Expulsar" con confirmación de seguridad `DangerConfirmModal`: `owner` puede expulsar a cualquiera menos a sí mismo; `admin` solo a `member` y `guest`.
@@ -485,6 +489,7 @@ CREATE POLICY "Salir o expulsar miembros" ON project_members
 | 29 | Fecha de creación en tarjeta y ordenación por antigüedad cuando coinciden tags | `287eeb1` |
 | 30 | Exportar e Importar proyecto completo en formato .csv con hitos y tarjetas | `b5a9fdd` |
 | 31 | Sistema de Rangos de Usuario (Owner, Admin, Member, Guest), Campana de Notificaciones interactiva y Gestión de Colaboradores | `28c4863` |
+| 32 | Fix persistencia de miembros expulsados, bloqueo de exportar CSV a Member/Guest y ordenación jerárquica de roles en modal | pendiente |
 
 ---
 

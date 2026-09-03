@@ -136,13 +136,7 @@ export default function ProjectView({
       const sessionUser = session?.user || null
       if (sessionUser && !currentUser) setCurrentUser(sessionUser)
 
-      // 1. Fetch GitHub repo collaborators with details (avatars)
-      let ghCollabs = []
-      if (token && project.repo_full_name) {
-        ghCollabs = await fetchRepoCollaboratorsDetails(project.repo_full_name, token)
-      }
-
-      // 2. Fetch Supabase project_members (con role) + profiles
+      // 1. Fetch Supabase project_members (con role)
       const { data: memberships } = await supabase
         .from('project_members')
         .select('user_id, role')
@@ -165,79 +159,63 @@ export default function ProjectView({
       setCurrentUserRole(currentRole)
       onRoleDetected?.(currentRole)
 
+      // 2. Fetch profiles SOLO para los usuarios que son miembros activos en project_members
+      // (y asegurar que el creador/owner siempre esté incluido si falta)
+      const memberUserIds = new Set((memberships ?? []).map(m => m.user_id))
+      if (project.created_by) memberUserIds.add(project.created_by)
+
       let dbProfiles = []
-      if (memberships?.length) {
-        const ids = memberships.map(m => m.user_id)
+      if (memberUserIds.size > 0) {
         const { data: profiles } = await supabase
           .from('profiles')
           .select('id, github_username, avatar_url')
-          .in('id', ids)
+          .in('id', Array.from(memberUserIds))
         dbProfiles = profiles ?? []
       }
 
-      // 3. Deduplicate and collect all collaborators
+      // 3. Obtener avatares de GitHub opcionalmente como enriquecimiento solo para miembros reales
+      let ghCollabsMap = new Map()
+      if (token && project.repo_full_name) {
+        try {
+          const ghCollabs = await fetchRepoCollaboratorsDetails(project.repo_full_name, token)
+          for (const c of ghCollabs) {
+            if (c.username) ghCollabsMap.set(c.username.toLowerCase(), c.avatar_url)
+          }
+        } catch (e) {
+          console.warn('Could not enrich avatars from GitHub API:', e)
+        }
+      }
+
+      // 4. Construir lista definitiva de miembros (única fuente de verdad: project_members)
       const map = new Map()
 
-      // Supabase profiles
       for (const p of dbProfiles) {
         if (p.github_username) {
           const uname = p.github_username.toLowerCase()
           const isProjOwner = project.created_by === p.id
           const userRole = isProjOwner ? 'owner' : (roleByUser.get(p.id) || 'member')
+          const avatar = p.avatar_url || ghCollabsMap.get(uname) || `https://github.com/${p.github_username}.png?size=64`
 
-          map.set(uname, {
+          map.set(p.id, {
             user_id: p.id,
             username: p.github_username,
             github_username: p.github_username,
-            avatar_url: p.avatar_url || `https://github.com/${p.github_username}.png?size=64`,
+            avatar_url: avatar,
             role: userRole,
           })
         }
       }
 
-      // GitHub repo collaborators (from API)
-      for (const c of ghCollabs) {
-        const uname = c.username.toLowerCase()
-        if (!map.has(uname)) {
-          map.set(uname, {
-            user_id: null,
-            username: c.username,
-            github_username: c.username,
-            avatar_url: c.avatar_url,
-            role: 'member',
-          })
-        }
-      }
-
-      // Stored collaborators on project record
-      if (Array.isArray(project.github_collaborators)) {
-        for (const u of project.github_collaborators) {
-          if (u) {
-            const uname = u.toLowerCase()
-            if (!map.has(uname)) {
-              map.set(uname, {
-                user_id: null,
-                username: u,
-                github_username: u,
-                avatar_url: `https://github.com/${u}.png?size=64`,
-                role: 'member',
-              })
-            }
-          }
-        }
-      }
-
-      // Current user fallback
-      const currentUserLogin = session?.user?.user_metadata?.user_name
-      if (currentUserLogin) {
-        const uname = currentUserLogin.toLowerCase()
-        if (!map.has(uname)) {
-          map.set(uname, {
-            user_id: session.user.id,
-            username: currentUserLogin,
-            github_username: currentUserLogin,
-            avatar_url: session.user.user_metadata?.avatar_url || `https://github.com/${currentUserLogin}.png?size=64`,
-            role: currentRole,
+      // Si el creador/owner no estaba en profiles por alguna razón, fallback con sesión si coincide
+      if (project.created_by && !map.has(project.created_by)) {
+        if (sessionUser && sessionUser.id === project.created_by) {
+          const uLogin = sessionUser.user_metadata?.user_name || 'owner'
+          map.set(project.created_by, {
+            user_id: project.created_by,
+            username: uLogin,
+            github_username: uLogin,
+            avatar_url: sessionUser.user_metadata?.avatar_url || `https://github.com/${uLogin}.png?size=64`,
+            role: 'owner',
           })
         }
       }
@@ -525,21 +503,23 @@ export default function ProjectView({
             </button>
           )}
 
-          {/* Exportar proyecto a CSV — disponible para todos los roles */}
-          <button
-            className="btn btn--ghost btn--sm"
-            onClick={handleExportProject}
-            disabled={exporting}
-            aria-label="Exportar proyecto a CSV"
-            title="Exportar proyecto, hitos y tarjetas a un archivo .csv"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            {exporting ? 'Exportando...' : 'Exportar'}
-          </button>
+          {/* Exportar proyecto a CSV — Solo Owner y Admin */}
+          {(currentUserRole === 'owner' || currentUserRole === 'admin') && (
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={handleExportProject}
+              disabled={exporting}
+              aria-label="Exportar proyecto a CSV"
+              title="Exportar proyecto, hitos y tarjetas a un archivo .csv"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              {exporting ? 'Exportando...' : 'Exportar'}
+            </button>
+          )}
 
           {/* Importar proyecto desde CSV: Solo Owner y Admin */}
           {(currentUserRole === 'owner' || currentUserRole === 'admin') && (
