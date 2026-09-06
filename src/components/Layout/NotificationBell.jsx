@@ -214,7 +214,21 @@ export default function NotificationBell({ user, onOpenProject, onRefreshHome })
                           </svg>
                         </span>
                       )}
-                      {isRole && (
+                      {isRole && n.metadata?.is_promotion === true && (
+                        <span className="notif-item__icon notif-item__icon--promote" title="Ascenso de rango">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="18 15 12 9 6 15" />
+                          </svg>
+                        </span>
+                      )}
+                      {isRole && n.metadata?.is_promotion === false && (
+                        <span className="notif-item__icon notif-item__icon--demote" title="Degradación de rango">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </span>
+                      )}
+                      {isRole && n.metadata?.is_promotion === undefined && (
                         <span className="notif-item__icon notif-item__icon--role" title="Cambio de rol">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />

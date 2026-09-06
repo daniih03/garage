@@ -15,7 +15,7 @@ export async function createUserNotification({
   if (!userId) return { error: 'userId is required' }
 
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('user_notifications')
       .insert({
         user_id: userId,
@@ -27,13 +27,12 @@ export async function createUserNotification({
         metadata,
         read: false,
       })
-      .select()
-      .single()
 
     if (error) {
       console.warn('Error creating user notification:', error)
+      return { error }
     }
-    return { data, error }
+    return { success: true }
   } catch (err) {
     console.warn('Notification insert exception:', err)
     return { error: err }

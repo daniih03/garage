@@ -372,14 +372,15 @@ export default function ProjectView({
       setKickError('No se pudo expulsar al colaborador: ' + error.message)
     } else {
       // Enviar notificación global al colaborador expulsado
+      const projName = project.repo_name || project.name || 'Proyecto'
       await createUserNotification({
         userId: memberToKick.user_id,
         projectId: project.id,
-        projectName: project.repo_name,
+        projectName: projName,
         type: 'project_kick',
-        title: `Expulsado de ${project.repo_name}`,
-        message: `Has sido expulsado del proyecto "${project.repo_name}". Ya no tienes acceso a sus hitos y tarjetas.`,
-        metadata: { project_name: project.repo_name },
+        title: `Expulsado de ${projName}`,
+        message: `Has sido expulsado del proyecto "${projName}". Ya no tienes acceso a sus hitos y tarjetas.`,
+        metadata: { project_name: projName, project_id: project.id },
       })
 
       setMembers(prev => prev.filter(m => m.user_id !== memberToKick.user_id))

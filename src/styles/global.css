@@ -503,6 +503,24 @@ a { color: inherit; text-decoration: none; }
 }
 .notif-item__icon {
   font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.notif-item__icon--invite {
+  color: var(--accent);
+}
+.notif-item__icon--kick {
+  color: var(--danger);
+}
+.notif-item__icon--role {
+  color: #F59E0B;
+}
+.notif-item__icon--promote {
+  color: var(--success, #10B981);
+}
+.notif-item__icon--demote {
+  color: #F97316;
 }
 
 .notif-item__content {

@@ -267,8 +267,8 @@ Formato: `ACRONIMO-MS-NNN`
 - **Botón de borrado individual (`✕`):** Cada notificación cuenta con un botón en la esquina superior derecha para eliminarla de forma definitiva de la base de datos (`DELETE FROM user_notifications`) y del estado local.
 - **Tipos de notificación:**
   - `project_invite`: Notificación al ser invitado a un proyecto. Permite aceptar o rechazar directamente desde el dropdown.
-  - `role_change`: Notificación cuando un Admin u Owner asciende o degrada el rol de un usuario.
-  - `project_kick`: Notificación cuando un usuario es expulsado de un proyecto (visible inmediatamente desde su panel principal).
+  - `role_change`: Notificación en tiempo real cuando un Admin u Owner cambia el rol de un usuario. Distingue entre ascenso y degradación mediante iconos y textos explícitos con el nombre del proyecto, el nuevo rango y el rango anterior.
+  - `project_kick`: Notificación en tiempo real cuando un usuario es expulsado de un proyecto, indicando claramente el nombre del proyecto del que fue expulsado.
 - Al marcar como leídas (individualmente o con "Marcar todas como leídas"), el badge numérico y el color rojo desaparecen.
 
 ### Sistema de Invitaciones de Proyecto (Ciclo de vida en BD)
@@ -328,11 +328,11 @@ Las invitaciones son **estrictamente manuales, explícitas y gobernadas al 100% 
 
 ### `NotificationBell.jsx`
 - Botón campana con badge numérico rojo animado si existen notificaciones no leídas (`user_notifications` con `read = false`).
-- Iconos vectoriales SVG nítidos para estado vacío (sin emojis) y para cada tipo de notificación (`project_invite`, `role_change`, `project_kick`).
+- Iconos vectoriales SVG nítidos para estado vacío (sin emojis) y para cada tipo de notificación (`project_invite`, `role_change` con distinción visual entre ascenso y degradación, `project_kick`).
 - Desplegable interactivo en tiempo real (`postgres_changes`):
-  - `project_invite`: permite aceptar o declinar invitaciones directamente. Las opciones de acción se mantienen siempre visibles sin ocultarse al hacer clic en el cuerpo de la notificación.
-  - `role_change`: notifica cambios de rol (ascensos y degradaciones).
-  - `project_kick`: notifica expulsiones de proyectos.
+  - `project_invite`: permite aceptar o declinar invitaciones directamente (desaparece de la lista tras la acción). Las opciones de acción se mantienen siempre visibles sin ocultarse al hacer clic en el cuerpo de la notificación.
+  - `role_change`: notifica cambios de rol distinguiendo ascenso (icono verde/arriba) de degradación (icono naranja/abajo), con el nombre del proyecto y roles involucrados.
+  - `project_kick`: notifica expulsiones de proyectos especificando el proyecto del que fue expulsado el usuario.
 - Botón individual `✕` en cada notificación para eliminarla permanentemente de la base de datos y de la vista.
 - Botón "Marcar todas como leídas" y marcado individual.
 
@@ -430,6 +430,7 @@ Las invitaciones son **estrictamente manuales, explícitas y gobernadas al 100% 
 - **Componentes específicos añadidos:**
   - `.header-role-badge` y sus variantes `--owner`, `--admin`, `--member`, `--guest`.
   - `.notif-wrapper`, `.notif-bell-btn`, `.notif-badge`, `.notif-dropdown`, `.notif-item`, `.notif-item__top-right`, `.notif-item__delete-btn`.
+  - `.notif-item__icon` y sus variantes de color: `--invite`, `--kick`, `--role`, `--promote`, `--demote`.
   - `.manage-members-list`, `.manage-member-row`, `.role-select`, `.btn-kick-member`.
 - **Mobile:** `@media (max-width: 768px)` al final del fichero. El Kanban se convierte en carrusel horizontal swipeable. Nunca tocar estilos desktop al hacer cambios mobile.
 - **Clases de badges:**
@@ -629,6 +630,7 @@ CREATE POLICY "Actualizar propio status de membresía" ON project_members
 | 34 | Redirección automática de usuarios expulsados a la vista de proyectos y deduplicación de hitos frente a eventos Realtime | `661358e` |
 | 35 | Reemplazo de emojis por SVG vectoriales en notificaciones y estado vacío de hitos, y persistencia de acciones de invitación al interactuar con la notificación | `d323f5c` |
 | 36 | Eliminación inmediata de notificaciones al aceptar o rechazar invitaciones, y ocultación del selector de estado en creación de tarjetas asignando 'To do' por defecto | `f66bf73` |
+| 37 | Notificaciones completas de expulsión de proyecto y cambios de rango (ascenso/degradación) con nombres de proyecto e inserción RLS corregida | `0b838ce` |
 
 ---
 

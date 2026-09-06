@@ -39,6 +39,14 @@ export default function ManageMembersModal({
     setUpdatingUserId(targetMember.user_id)
 
     const oldRole = targetMember.role || 'member'
+    const projName = project.repo_name || project.name || 'Proyecto'
+    const isPromotion = (ROLE_WEIGHTS[newRole] || 99) < (ROLE_WEIGHTS[oldRole] || 99)
+    const title = isPromotion
+      ? `Ascenso de rango en ${projName}`
+      : `Degradación de rango en ${projName}`
+    const message = isPromotion
+      ? `Has sido ascendido al rango de ${newRole.toUpperCase()} en el proyecto "${projName}". (Rango anterior: ${oldRole.toUpperCase()})`
+      : `Has sido degradado al rango de ${newRole.toUpperCase()} en el proyecto "${projName}". (Rango anterior: ${oldRole.toUpperCase()})`
 
     try {
       const { error: updateError } = await supabase
@@ -53,11 +61,11 @@ export default function ManageMembersModal({
       await createUserNotification({
         userId: targetMember.user_id,
         projectId: project.id,
-        projectName: project.repo_name,
+        projectName: projName,
         type: 'role_change',
-        title: `Rol actualizado en ${project.repo_name}`,
-        message: `Tu rol en el proyecto "${project.repo_name}" ha cambiado de ${oldRole.toUpperCase()} a ${newRole.toUpperCase()}.`,
-        metadata: { old_role: oldRole, new_role: newRole },
+        title,
+        message,
+        metadata: { old_role: oldRole, new_role: newRole, is_promotion: isPromotion, project_name: projName },
       })
 
       onMembersUpdated?.()
@@ -74,6 +82,8 @@ export default function ManageMembersModal({
     setError('')
 
     const kickedUser = memberToKick
+    const projName = project.repo_name || project.name || 'Proyecto'
+
     try {
       const { error: kickErr } = await supabase
         .from('project_members')
@@ -87,11 +97,11 @@ export default function ManageMembersModal({
       await createUserNotification({
         userId: kickedUser.user_id,
         projectId: project.id,
-        projectName: project.repo_name,
+        projectName: projName,
         type: 'project_kick',
-        title: `Expulsado de ${project.repo_name}`,
-        message: `Has sido expulsado del proyecto "${project.repo_name}". Ya no tienes acceso a sus hitos y tarjetas.`,
-        metadata: { project_name: project.repo_name },
+        title: `Expulsado de ${projName}`,
+        message: `Has sido expulsado del proyecto "${projName}". Ya no tienes acceso a sus hitos y tarjetas.`,
+        metadata: { project_name: projName, project_id: project.id },
       })
 
       setMemberToKick(null)
