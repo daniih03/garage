@@ -46,8 +46,8 @@ export default function CardModal({
   const isEditing = Boolean(card)
 
   const initialStatus = isEditing
-    ? (card?.status === 'inprogress' ? 'doing' : card?.status ?? '')
-    : (defaultStatus ? (defaultStatus === 'inprogress' ? 'doing' : defaultStatus) : '')
+    ? (card?.status === 'inprogress' ? 'doing' : card?.status ?? 'todo')
+    : 'todo'
 
   /* ── Form state ── */
   const [form, setForm] = useState({
@@ -335,7 +335,7 @@ export default function CardModal({
       setError('El campo Prioridad (Low, Mid, High o Critical) es obligatorio.')
       return
     }
-    if (!form.status) {
+    if (isEditing && !form.status) {
       setError('El campo Estado (To do, Doing, Blocked o Done) es obligatorio.')
       return
     }
@@ -343,10 +343,12 @@ export default function CardModal({
     setSaving(true)
     setError('')
 
+    const finalStatus = isEditing ? (form.status || 'todo') : 'todo'
+
     const payload = {
       title,
       description:    form.description.trim()    || null,
-      status:         form.status,
+      status:         finalStatus,
       primary_type:   form.primary_type,
       secondary_type: form.secondary_type,
       priority:       form.priority,
@@ -374,7 +376,7 @@ export default function CardModal({
       const displayId = `${project.repo_acronym}-${msNum}-${String(nextNum).padStart(3, '0')}`
 
       const targetStatusCards = (milestoneCards.length > 0 ? milestoneCards : (cardsInStatus || []))
-        .filter(c => c.status === form.status || (form.status === 'doing' && c.status === 'inprogress'))
+        .filter(c => c.status === finalStatus || (finalStatus === 'doing' && c.status === 'inprogress'))
 
       const position = targetStatusCards.length > 0
         ? Math.max(...targetStatusCards.map(c => c.position ?? 0)) + 1
@@ -665,32 +667,34 @@ export default function CardModal({
                 </div>
               </div>
 
-              {/* Status */}
-              <div className="form-group">
-                <span className="form-label" id="status-label">
-                  Estado <span className="required" aria-hidden="true">*</span>
-                </span>
-                <div className="status-selector" role="radiogroup" aria-labelledby="status-label">
-                  {STATUSES.map(s => (
-                    <label
-                      key={s.id}
-                      className={`status-option${form.status === s.id ? ' status-option--active' : ''}`}
-                      style={form.status === s.id ? { borderColor: s.color, color: s.color } : {}}
-                    >
-                      <input
-                        type="radio"
-                        name="status"
-                        value={s.id}
-                        checked={form.status === s.id}
-                        onChange={handleInputChange}
-                        style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
-                        aria-label={s.label}
-                      />
-                      {s.label}
-                    </label>
-                  ))}
+              {/* Status (solo en modo edición; en creación se asigna To do automáticamente) */}
+              {isEditing && (
+                <div className="form-group">
+                  <span className="form-label" id="status-label">
+                    Estado <span className="required" aria-hidden="true">*</span>
+                  </span>
+                  <div className="status-selector" role="radiogroup" aria-labelledby="status-label">
+                    {STATUSES.map(s => (
+                      <label
+                        key={s.id}
+                        className={`status-option${form.status === s.id ? ' status-option--active' : ''}`}
+                        style={form.status === s.id ? { borderColor: s.color, color: s.color } : {}}
+                      >
+                        <input
+                          type="radio"
+                          name="status"
+                          value={s.id}
+                          checked={form.status === s.id}
+                          onChange={handleInputChange}
+                          style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
+                          aria-label={s.label}
+                        />
+                        {s.label}
+                      </label>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Comments (edit mode only) */}
               {isEditing && (

@@ -441,7 +441,7 @@ export default function Board({ project, milestone, currentUserRole, refreshKey 
             <button
               type="button"
               className="board-create-btn"
-              onClick={() => handleOpenCard(null, '')}
+              onClick={() => handleOpenCard(null, 'todo')}
               title="Nueva tarjeta"
             >
               <svg width="13" height="13" viewBox="0 0 15 15" fill="none" aria-hidden="true">

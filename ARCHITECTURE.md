@@ -276,7 +276,7 @@ Las invitaciones son **estrictamente manuales, explícitas y gobernadas al 100% 
 - **Cero dependencias de `localStorage`:** Se eliminó cualquier array o caché local (`garage_accepted_invites`, `garage_declined_invites`), resolviendo estados fantasmas al ser re-invitado o tras abandonar un proyecto.
 - **Invitación:** Un `owner` o `admin` invita desde `InviteModal.jsx`. Se inserta en `project_members` con `role = 'member'` y `status = 'pending'`, además de generar la notificación en `user_notifications`.
 - **Visualización en `HomePage`:** `HomePage.jsx` solo muestra en el grid proyectos donde el usuario es el creador (`created_by`) o donde su membresía tiene `status = 'active'`. Si el usuario tiene una invitación pendiente (`status = 'pending'`), el proyecto **no** se muestra en su grid hasta que acepte.
-- **Aceptar invitación:** En `NotificationBell.jsx`, el usuario pulsa "Aceptar". Esto actualiza en la base de datos `status = 'active'` en `project_members`, marca la notificación como leída y refresca `HomePage` para que el proyecto aparezca al instante.
+- **Aceptar invitación:** En `NotificationBell.jsx`, el usuario pulsa "Aceptar". Esto actualiza en la base de datos `status = 'active'` en `project_members`, elimina físicamente la notificación de `user_notifications` (haciéndola desaparecer de inmediato de la bandeja) y refresca `HomePage` para que el proyecto aparezca al instante.
 - **Rechazar invitación:** En `NotificationBell.jsx`, el usuario pulsa "Rechazar". Se elimina físicamente la fila en `project_members`, se elimina la notificación y el usuario permanece sin acceso al proyecto tal como estaba.
 - **Salida / Expulsión:** Si un usuario abandona el proyecto o es expulsado por un superior, su fila en `project_members` se elimina por completo. Si posteriormente es invitado de nuevo, se le crea una nueva membresía en `status = 'pending'`, requiriendo nuevamente que acepte desde la campana.
 
@@ -399,7 +399,8 @@ Las invitaciones son **estrictamente manuales, explícitas y gobernadas al 100% 
 
 ### `CardModal.jsx`
 - Formulario de creación/edición de tarjeta. Si `canMutate` es `false` (rol `guest`), oculta los botones de guardar y eliminar, dejando solo el botón "Cerrar".
-- Campo Estado obligatorio al crear tarjeta.
+- **Creación de tarjeta:** La opción de elegir estado se omite de la interfaz y se le asigna de manera automática e inequívoca el estado `'todo'` (To do).
+- **Edición de tarjeta:** Se presenta el selector de Estado para permitir mover la tarjeta entre To do, Doing, Blocked o Done con validación obligatoria.
 - Sistema de menciones `@` con vista comparativa paralela.
 - Sección de comentarios con realtime.
 
@@ -627,6 +628,7 @@ CREATE POLICY "Actualizar propio status de membresía" ON project_members
 | 33 | Corrección de creación de hitos, eliminación de auto-invitaciones de GitHub, centralización de invitaciones en campana de cabecera con ciclo de vida gobernado por status en BD, borrado individual de notificaciones (botón ✕) y restricción de papelera de proyecto solo a Owner | `01f33c9` |
 | 34 | Redirección automática de usuarios expulsados a la vista de proyectos y deduplicación de hitos frente a eventos Realtime | `661358e` |
 | 35 | Reemplazo de emojis por SVG vectoriales en notificaciones y estado vacío de hitos, y persistencia de acciones de invitación al interactuar con la notificación | `d323f5c` |
+| 36 | Eliminación inmediata de notificaciones al aceptar o rechazar invitaciones, y ocultación del selector de estado en creación de tarjetas asignando 'To do' por defecto | `f66bf73` |
 
 ---
 

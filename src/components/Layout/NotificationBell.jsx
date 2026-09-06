@@ -80,9 +80,13 @@ export default function NotificationBell({ user, onOpenProject, onRefreshHome })
         .eq('project_id', notification.project_id)
         .eq('user_id', user.id)
 
-      // 2. Marcar notificación como leída
-      await markNotificationRead(notification.id)
-      setNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, read: true } : n))
+      // 2. Eliminar la notificación de la base de datos y retirarla de la lista
+      await supabase
+        .from('user_notifications')
+        .delete()
+        .eq('id', notification.id)
+
+      setNotifications(prev => prev.filter(n => n.id !== notification.id))
       
       // 3. Notificar a HomePage para mostrar el proyecto inmediatamente
       onRefreshHome?.()
