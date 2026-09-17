@@ -124,18 +124,82 @@ export async function fetchRepoCollaboratorsDetails(ownerRepo, token) {
 }
 
 /**
- * Derive an acronym from a repo name using its consonants (uppercase, max 6).
- * Falls back to the first 4 chars if no consonants are found.
+ * Derive a smart acronym from a repo name:
+ * - Handles camelCase, dashes, underscores, spaces and dots.
+ * - Retains digits (e.g. "v2", "2026") and vowels for short acronyms/initials.
+ * - Distributes letters across words so long names differentiate properly (e.g. backend vs frontend).
+ * - Filters minor stop words when there are 3+ words.
+ * - Max length 6 chars (standard uppercase alfanumeric).
+ *
+ * Examples:
+ *   "garage"                         → "GRG"
+ *   "garage-tool"                    → "GRGTL"
+ *   "my-long-project-backend"        → "MLPB"
+ *   "my-long-project-frontend"       → "MLPF"
+ *   "sistema de facturacion 2"       → "SF2"
  */
 export function getAcronym(repoName) {
-  const cleaned = repoName.toLowerCase().replace(/[-_.\s]/g, '')
-  const consonants = cleaned
-    .split('')
-    .filter((c) => /[bcdfghjklmnpqrstvwxyz]/.test(c))
-    .join('')
-    .toUpperCase()
-    .slice(0, 6)
-  return consonants || repoName.slice(0, 4).toUpperCase()
+  if (!repoName || typeof repoName !== 'string') return 'PRJ'
+  const STOP_WORDS = new Set([
+    'de', 'del', 'la', 'el', 'los', 'las', 'y', 'e', 'o', 'en', 'para', 'por', 'con',
+    'a', 'the', 'of', 'and', 'for', 'in', 'on', 'to', 'with', 'by'
+  ])
+
+  const splitStr = repoName
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[^a-zA-Z0-9\s-_.]/g, ' ')
+
+  let tokens = splitStr
+    .split(/[\s\-_.]+/)
+    .map(t => t.trim().toLowerCase())
+    .filter(Boolean)
+
+  if (tokens.length === 0) return 'PRJ'
+
+  if (tokens.length > 2) {
+    const filtered = tokens.filter(t => !STOP_WORDS.has(t))
+    if (filtered.length >= 2) tokens = filtered
+  }
+
+  const getConsonantsOrChars = (t) => {
+    if (/^[a-z]?\d+$/i.test(t)) return t
+    const cons = t.split('').filter(c => /[bcdfghjklmnpqrstvwxyz0-9]/.test(c)).join('')
+    const collapsed = cons.replace(/(.)\1+/g, '$1')
+    return collapsed.length >= 1 ? collapsed : t.replace(/[^a-z0-9]/g, '')
+  }
+
+  let result = ''
+
+  if (tokens.length === 1) {
+    const t = tokens[0]
+    const cons = t.split('').filter(c => /[bcdfghjklmnpqrstvwxyz0-9]/.test(c)).join('')
+    const collapsed = cons.replace(/(.)\1+/g, '$1')
+    if (collapsed.length >= 2) {
+      result = collapsed.slice(0, 6)
+    } else {
+      result = t.slice(0, 4)
+    }
+  } else if (tokens.length === 2) {
+    const c1 = getConsonantsOrChars(tokens[0])
+    const c2 = getConsonantsOrChars(tokens[1])
+    result = (c1.slice(0, 3) + c2.slice(0, 3)).slice(0, 6)
+  } else if (tokens.length === 3) {
+    const c1 = getConsonantsOrChars(tokens[0])
+    const c2 = getConsonantsOrChars(tokens[1])
+    const c3 = getConsonantsOrChars(tokens[2])
+    result = (c1.slice(0, 2) + c2.slice(0, 2) + c3.slice(0, 2)).slice(0, 6)
+  } else {
+    result = tokens.slice(0, 6).map(t => {
+      if (/^[a-z]?\d+$/i.test(t)) return t
+      return t[0] || ''
+    }).join('').slice(0, 6)
+    if (result.length < 3) {
+      result = (tokens[0].slice(0, 2) + tokens.slice(1).map(t => /^[a-z]?\d+$/i.test(t) ? t : (t[0] || '')).join('')).slice(0, 6)
+    }
+  }
+
+  result = result.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  return result || repoName.slice(0, 4).toUpperCase().replace(/[^A-Z0-9]/g, '') || 'PRJ'
 }
 
 /**

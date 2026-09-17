@@ -232,13 +232,22 @@ Todos los canales suscritos usan `postgres_changes`:
 
 ## 7. Lógica de Negocio Clave
 
-### IDs de Tarjetas
+### IDs de Tarjetas y Generación Inteligente de Acrónimos
 Formato: `ACRONIMO-MS-NNN`
-- `ACRONIMO`: `repo_acronym` del proyecto (ej: `GRGTL`)
+- `ACRONIMO`: `repo_acronym` del proyecto (ej: `GRGTL`, `MLPB`, `SGA2`)
 - `MS`: número de hito con 2 dígitos (ej: `01`, `02`)
 - `NNN`: número de tarjeta con 3 dígitos (ej: `001`, `023`)
 - Ejemplo completo: `GRGTL-01-023`
-- Auto-migración de IDs legados de 1 dígito de hito al formato de 2 dígitos en `fetchCards()`
+- Auto-migración de IDs legados de 1 dígito de hito al formato de 2 dígitos en `fetchCards()`.
+- **Generación inteligente de acrónimos (`getAcronym` en `lib/github.js`):**
+  - Divide el nombre del repositorio considerando delimitadores (`-`, `_`, `.`, espacios) y límites camelCase.
+  - Filtra palabras de enlace o conectores secundarios (`de`, `del`, `la`, `el`, `para`, `of`, `and`, etc.) cuando existen 3 o más términos.
+  - Preserva y refleja números y sufijos de versión (`v2`, `2026`, etc.).
+  - Distribuye las letras representativas equilibradamente entre las palabras del nombre (1 palabra: hasta 6 consonantes/letras; 2 palabras: 3 + 3; 3 palabras: 2 + 2 + 2; 4+ palabras: iniciales de cada término relevante).
+  - Evita que nombres largos queden congelados en un prefijo estático tras 6 caracteres: variaciones al final del nombre o en palabras secundarias producen acrónimos diferenciados.
+  - Capped a un máximo de 6 caracteres alfanuméricos en mayúsculas.
+- **Edición manual de ID/Acrónimo:** Tanto en la creación (`AddProjectModal`) como en la edición (`EditProjectModal`), el usuario dispone de un campo explícito para personalizar el acrónimo libremente o regenerarlo automáticamente con un botón.
+- **Actualización en cascada al renombrar proyecto:** Si el acrónimo del proyecto cambia en `EditProjectModal`, se actualizan en la base de datos todas las tarjetas del proyecto (`display_id`), sus menciones cruzadas en descripciones y títulos (`@OLD_ACR-` → `@NEW_ACR-`) y las referencias en `card_comments`. Realtime en `Board.jsx` refleja los nuevos IDs al instante.
 
 ### Sistema de Comentarios No Leídos
 - **localStorage key:** `garage_viewed_comments_{userId}` → objeto `{ [cardId]: ISO_timestamp }`
@@ -351,7 +360,13 @@ Las invitaciones son **estrictamente manuales, explícitas y gobernadas al 100% 
 ### `AddProjectModal.jsx`
 - Modal para registrar nuevo proyecto desde GitHub.
 - Inserta el proyecto en `projects` y asegura explícitamente al creador en `project_members` con rol `'owner'`.
+- Incluye selector de repositorio, nombre editable de proyecto y campo para el ID del proyecto (acrónimo), con sugerencia automática inteligente reactiva (`getAcronym`) y botón para regenerar o personalizar manualmente.
 - No auto-invita a ningún colaborador de GitHub.
+
+### `EditProjectModal.jsx`
+- Modal para editar nombre, ID/acrónimo y descripción del proyecto existente (disponible para `owner` y `admin`).
+- Permite personalizar manualmente el ID/acrónimo o regenerarlo automáticamente al editar el nombre.
+- Si el ID/acrónimo cambia, ejecuta una **actualización en cascada** en la base de datos: actualiza `display_id` de todas las tarjetas existentes (`OLD-01-001` → `NEW-01-001`), actualiza menciones cruzadas en descripciones y títulos (`@OLD-` → `@NEW-`) y en comentarios (`card_comments`). Realtime propaga los cambios instantáneamente a `Board.jsx`.
 
 ### `ProjectView.jsx`
 - Carga miembros basándose **estrictamente en `project_members`** con sus roles correspondientes y detecta el rol del usuario actual (`currentUserRole`).
@@ -631,6 +646,7 @@ CREATE POLICY "Actualizar propio status de membresía" ON project_members
 | 35 | Reemplazo de emojis por SVG vectoriales en notificaciones y estado vacío de hitos, y persistencia de acciones de invitación al interactuar con la notificación | `d323f5c` |
 | 36 | Eliminación inmediata de notificaciones al aceptar o rechazar invitaciones, y ocultación del selector de estado en creación de tarjetas asignando 'To do' por defecto | `f66bf73` |
 | 37 | Notificaciones completas de expulsión de proyecto y cambios de rango (ascenso/degradación) con nombres de proyecto e inserción RLS corregida | `0b838ce` |
+| 38 | Actualización en cascada de IDs de tarjetas y menciones al renombrar proyectos, acrónimos inteligentes para nombres largos/números y edición manual de ID de proyecto | `3dfce59` |
 
 ---
 

@@ -4,10 +4,12 @@ import { supabase } from '../../lib/supabase'
 import { getAcronym } from '../../lib/github'
 
 export default function EditProjectModal({ project, onProjectUpdated, onClose }) {
-  const [projectName, setProjectName] = useState(project.repo_name ?? '')
-  const [projectDesc, setProjectDesc] = useState(project.description ?? '')
-  const [saving,      setSaving]      = useState(false)
-  const [error,       setError]       = useState('')
+  const [projectName,    setProjectName]    = useState(project.repo_name ?? '')
+  const [projectAcronym, setProjectAcronym] = useState(project.repo_acronym ?? getAcronym(project.repo_name ?? ''))
+  const [isAcronymManual, setIsAcronymManual] = useState(false)
+  const [projectDesc,    setProjectDesc]    = useState(project.description ?? '')
+  const [saving,         setSaving]         = useState(false)
+  const [error,          setError]          = useState('')
   const inputRef = useRef(null)
 
   useEffect(() => {
@@ -20,15 +22,23 @@ export default function EditProjectModal({ project, onProjectUpdated, onClose })
   async function handleSubmit(e) {
     e.preventDefault()
     const trimmedName = projectName.trim()
+    const trimmedAcronym = projectAcronym.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
     if (!trimmedName) {
       setError('El nombre del proyecto es obligatorio.')
+      return
+    }
+    if (!trimmedAcronym) {
+      setError('El ID / acrónimo del proyecto es obligatorio.')
       return
     }
 
     setSaving(true)
     setError('')
 
-    const newAcronym = getAcronym(trimmedName)
+    const oldAcronym = project.repo_acronym
+    const newAcronym = trimmedAcronym
+    const acronymChanged = oldAcronym !== newAcronym
+
     const updatedPayload = {
       repo_name:    trimmedName,
       repo_acronym: newAcronym,
@@ -43,13 +53,106 @@ export default function EditProjectModal({ project, onProjectUpdated, onClose })
     if (dbError) {
       setError(dbError.message)
       setSaving(false)
-    } else {
-      onProjectUpdated?.({
-        ...project,
-        ...updatedPayload,
-      })
-      onClose()
+      return
     }
+
+    // Si el acrónimo/ID del proyecto ha cambiado, actualizar en cascada todas las tarjetas creadas
+    if (acronymChanged) {
+      try {
+        const { data: cards, error: cardsFetchErr } = await supabase
+          .from('cards')
+          .select('id, display_id, description, title')
+          .eq('project_id', project.id)
+
+        if (!cardsFetchErr && cards && cards.length > 0) {
+          const oldPrefixRegex = oldAcronym ? new RegExp(`^${oldAcronym}-`, 'i') : null
+          const anyPrefixRegex = /^([A-Z0-9]+)-(\d{1,2}-\d{3})$/i
+          const oldMentionRegex = oldAcronym ? new RegExp(`@${oldAcronym}-(\\d{1,2}-\\d{3})`, 'gi') : null
+
+          const cardUpdates = cards.map(c => {
+            let newDisplayId = c.display_id
+            if (c.display_id) {
+              if (oldPrefixRegex && oldPrefixRegex.test(c.display_id)) {
+                newDisplayId = c.display_id.replace(oldPrefixRegex, `${newAcronym}-`)
+              } else if (anyPrefixRegex.test(c.display_id)) {
+                newDisplayId = c.display_id.replace(anyPrefixRegex, `${newAcronym}-$2`)
+              }
+            }
+
+            let newDesc = c.description
+            if (newDesc && oldMentionRegex && oldMentionRegex.test(newDesc)) {
+              newDesc = newDesc.replace(oldMentionRegex, `@${newAcronym}-$1`)
+            }
+
+            let newTitle = c.title
+            if (newTitle && oldMentionRegex && oldMentionRegex.test(newTitle)) {
+              newTitle = newTitle.replace(oldMentionRegex, `@${newAcronym}-$1`)
+            }
+
+            const hasChanges =
+              newDisplayId !== c.display_id ||
+              newDesc !== c.description ||
+              newTitle !== c.title
+
+            return hasChanges
+              ? { id: c.id, display_id: newDisplayId, description: newDesc, title: newTitle }
+              : null
+          }).filter(Boolean)
+
+          if (cardUpdates.length > 0) {
+            await Promise.all(
+              cardUpdates.map(u =>
+                supabase
+                  .from('cards')
+                  .update({
+                    display_id: u.display_id,
+                    description: u.description,
+                    title: u.title,
+                  })
+                  .eq('id', u.id)
+              )
+            )
+          }
+
+          // Actualizar posibles menciones en los comentarios de las tarjetas del proyecto
+          const cardIds = cards.map(c => c.id)
+          if (oldMentionRegex && cardIds.length > 0) {
+            const { data: comments } = await supabase
+              .from('card_comments')
+              .select('id, content')
+              .in('card_id', cardIds)
+
+            if (comments && comments.length > 0) {
+              const commentUpdates = comments
+                .filter(cm => cm.content && oldMentionRegex.test(cm.content))
+                .map(cm => ({
+                  id: cm.id,
+                  content: cm.content.replace(oldMentionRegex, `@${newAcronym}-$1`),
+                }))
+
+              if (commentUpdates.length > 0) {
+                await Promise.all(
+                  commentUpdates.map(cm =>
+                    supabase
+                      .from('card_comments')
+                      .update({ content: cm.content })
+                      .eq('id', cm.id)
+                  )
+                )
+              }
+            }
+          }
+        }
+      } catch (cascadeErr) {
+        console.warn('Error al actualizar tarjetas tras renombrar proyecto:', cascadeErr)
+      }
+    }
+
+    onProjectUpdated?.({
+      ...project,
+      ...updatedPayload,
+    })
+    onClose()
   }
 
   return createPortal(
@@ -84,9 +187,9 @@ export default function EditProjectModal({ project, onProjectUpdated, onClose })
               <label className="form-label" htmlFor="edit-proj-name">
                 Nombre del proyecto <span className="required">*</span>
               </label>
-              {projectName.trim() && (
+              {(projectAcronym.trim() || projectName.trim()) && (
                 <span className="display-id-badge" style={{ fontSize: 10, padding: '1px 6px' }}>
-                  ID: {getAcronym(projectName)}
+                  ID: {projectAcronym.trim() || getAcronym(projectName)}
                 </span>
               )}
             </div>
@@ -96,10 +199,59 @@ export default function EditProjectModal({ project, onProjectUpdated, onClose })
               type="text"
               className="form-input"
               value={projectName}
-              onChange={e => { setProjectName(e.target.value); setError('') }}
+              onChange={e => {
+                const val = e.target.value
+                setProjectName(val)
+                setError('')
+                if (!isAcronymManual) {
+                  setProjectAcronym(getAcronym(val))
+                }
+              }}
               placeholder="Nombre del proyecto…"
               required
             />
+          </div>
+
+          {/* Project Acronym / ID */}
+          <div className="form-group">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <label className="form-label" htmlFor="edit-proj-acronym" style={{ marginBottom: 0 }}>
+                ID del proyecto (Acrónimo) <span className="required">*</span>
+              </label>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                style={{ fontSize: 11, padding: '2px 8px', height: 'auto' }}
+                onClick={() => {
+                  setProjectAcronym(getAcronym(projectName))
+                  setIsAcronymManual(false)
+                }}
+                title="Regenerar ID automáticamente a partir del nombre"
+              >
+                Regenerar
+              </button>
+            </div>
+            <input
+              id="edit-proj-acronym"
+              type="text"
+              className="form-input"
+              style={{ fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+              value={projectAcronym}
+              maxLength={8}
+              onChange={e => {
+                const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+                setProjectAcronym(val)
+                setIsAcronymManual(true)
+                setError('')
+              }}
+              placeholder="Ej: GRG, PRJ01…"
+              required
+            />
+            {project.repo_acronym && projectAcronym.trim().toUpperCase() !== project.repo_acronym && (
+              <p style={{ fontSize: 11, color: 'var(--accent)', marginTop: 4 }}>
+                ℹ️ Al guardar, se actualizará automáticamente el ID de las tarjetas ya creadas ({project.repo_acronym}-... → {projectAcronym.trim().toUpperCase()}-...).
+              </p>
+            )}
           </div>
 
           {/* Project Description */}
@@ -124,7 +276,7 @@ export default function EditProjectModal({ project, onProjectUpdated, onClose })
             <button
               type="submit"
               className="btn btn--primary"
-              disabled={saving || !projectName.trim()}
+              disabled={saving || !projectName.trim() || !projectAcronym.trim()}
             >
               {saving ? 'Guardando…' : 'Guardar cambios'}
             </button>

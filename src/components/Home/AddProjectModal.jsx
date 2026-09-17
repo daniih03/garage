@@ -18,6 +18,8 @@ export default function AddProjectModal({ existingProjects, onClose }) {
   const [manualInput,    setManualInput]    = useState('')
   const [selected,       setSelected]       = useState(null)
   const [projectName,    setProjectName]    = useState('')
+  const [projectAcronym, setProjectAcronym] = useState('')
+  const [isAcronymManual, setIsAcronymManual] = useState(false)
   const [projectDesc,    setProjectDesc]    = useState('')
   const [saving,         setSaving]         = useState(false)
   const [error,          setError]          = useState('')
@@ -54,6 +56,8 @@ export default function AddProjectModal({ existingProjects, onClose }) {
   function handleSelectRepo(repo) {
     setSelected(repo)
     setProjectName(repo.name)
+    setProjectAcronym(getAcronym(repo.name))
+    setIsAcronymManual(false)
     setProjectDesc(repo.description || '')
     setError('')
   }
@@ -83,8 +87,13 @@ export default function AddProjectModal({ existingProjects, onClose }) {
     if (!selected) return
 
     const trimmedName = projectName.trim()
+    const trimmedAcronym = (projectAcronym.trim() || getAcronym(trimmedName)).toUpperCase().replace(/[^A-Z0-9]/g, '')
     if (!trimmedName) {
       setError('El nombre del proyecto es obligatorio.')
+      return
+    }
+    if (!trimmedAcronym) {
+      setError('El ID / acrónimo del proyecto es obligatorio.')
       return
     }
 
@@ -117,7 +126,7 @@ export default function AddProjectModal({ existingProjects, onClose }) {
       repo_full_name:       selected.full_name,
       repo_name:            trimmedName,
       repo_url:             selected.html_url,
-      repo_acronym:         getAcronym(trimmedName),
+      repo_acronym:         trimmedAcronym,
       description:          projectDesc.trim() || null,
       created_by:           user?.id ?? null,
       github_collaborators: collabsList,
@@ -200,9 +209,9 @@ export default function AddProjectModal({ existingProjects, onClose }) {
                   <label className="form-label" htmlFor="proj-name">
                     Nombre del proyecto <span className="required">*</span>
                   </label>
-                  {projectName.trim() && (
+                  {(projectAcronym.trim() || projectName.trim()) && (
                     <span className="display-id-badge" style={{ fontSize: 10, padding: '1px 6px' }}>
-                      ID: {getAcronym(projectName)}
+                      ID: {projectAcronym.trim() || getAcronym(projectName)}
                     </span>
                   )}
                 </div>
@@ -211,11 +220,58 @@ export default function AddProjectModal({ existingProjects, onClose }) {
                   type="text"
                   className="form-input"
                   value={projectName}
-                  onChange={e => setProjectName(e.target.value)}
+                  onChange={e => {
+                    const val = e.target.value
+                    setProjectName(val)
+                    setError('')
+                    if (!isAcronymManual) {
+                      setProjectAcronym(getAcronym(val))
+                    }
+                  }}
                   placeholder="Nombre representativo del proyecto…"
                   autoFocus
                   required
                 />
+              </div>
+
+              {/* Project Acronym / ID */}
+              <div className="form-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <label className="form-label" htmlFor="proj-acronym" style={{ marginBottom: 0 }}>
+                    ID del proyecto (Acrónimo) <span className="required">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    style={{ fontSize: 11, padding: '2px 8px', height: 'auto' }}
+                    onClick={() => {
+                      setProjectAcronym(getAcronym(projectName))
+                      setIsAcronymManual(false)
+                    }}
+                    title="Regenerar ID automáticamente a partir del nombre"
+                  >
+                    Regenerar
+                  </button>
+                </div>
+                <input
+                  id="proj-acronym"
+                  type="text"
+                  className="form-input"
+                  style={{ fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                  value={projectAcronym}
+                  maxLength={8}
+                  onChange={e => {
+                    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+                    setProjectAcronym(val)
+                    setIsAcronymManual(true)
+                    setError('')
+                  }}
+                  placeholder="Ej: GRG, PRJ01…"
+                  required
+                />
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                  Prefijo que identificará las tarjetas de este proyecto (ej: {projectAcronym || 'ID'}-01-001).
+                </p>
               </div>
 
               {/* Editable brief description */}
@@ -356,7 +412,7 @@ export default function AddProjectModal({ existingProjects, onClose }) {
                 type="button"
                 className="btn btn--primary"
                 onClick={handleAdd}
-                disabled={saving || !projectName.trim()}
+                disabled={saving || !projectName.trim() || !projectAcronym.trim()}
               >
                 {saving ? 'Creando…' : 'Crear proyecto'}
               </button>
